@@ -1,0 +1,355 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import Image from "next/image";
+import Link from "next/link";
+
+type MemberResult = {
+  id: number;
+  name: string;
+  beltRank: string | null;
+  ageGroup: string | null;
+  status: string;
+  photoUrl: string | null;
+  trainingType: string | null;
+};
+
+type CheckInState = "idle" | "loading" | "success" | "error";
+
+const BELT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  white:  { bg: "bg-white",       text: "text-gray-900", label: "White Belt" },
+  blue:   { bg: "bg-blue-600",    text: "text-white",    label: "Blue Belt" },
+  purple: { bg: "bg-purple-700",  text: "text-white",    label: "Purple Belt" },
+  brown:  { bg: "bg-amber-800",   text: "text-white",    label: "Brown Belt" },
+  black:  { bg: "bg-gray-900",    text: "text-white",    label: "Black Belt" },
+};
+
+const STATUS_STYLES: Record<string, { badge: string; label: string }> = {
+  active:   { badge: "bg-green-500/20 text-green-400 border-green-500/40",   label: "Active" },
+  trial:    { badge: "bg-yellow-500/20 text-yellow-300 border-yellow-500/40", label: "Trial" },
+  past_due: { badge: "bg-red-500/20 text-red-400 border-red-500/40",         label: "Past Due" },
+  inactive: { badge: "bg-gray-500/20 text-gray-400 border-gray-500/40",      label: "Inactive" },
+  lead:     { badge: "bg-blue-500/20 text-blue-400 border-blue-500/40",      label: "Lead" },
+};
+
+function BeltBadge({ rank }: { rank: string | null }) {
+  const belt = rank ? BELT_STYLES[rank.toLowerCase()] : null;
+  if (!belt) return null;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold ${belt.bg} ${belt.text}`}>
+      <span className="w-2 h-2 rounded-full bg-current opacity-60" />
+      {belt.label}
+    </span>
+  );
+}
+
+function Initials({ name }: { name: string }) {
+  const parts = name.trim().split(" ");
+  const initials = parts.length >= 2
+    ? parts[0][0] + parts[parts.length - 1][0]
+    : parts[0].slice(0, 2);
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gray-700 text-4xl font-bold text-gray-300 select-none">
+      {initials.toUpperCase()}
+    </div>
+  );
+}
+
+type ActiveClass = { id: number; name: string; startTime: string; endTime: string };
+
+export default function KioskPage() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<MemberResult[]>([]);
+  const [selected, setSelected] = useState<MemberResult | null>(null);
+  const [checkInState, setCheckInState] = useState<CheckInState>("idle");
+  const [searching, setSearching] = useState(false);
+  const [activeClasses, setActiveClasses] = useState<ActiveClass[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/classes/active")
+      .then((r) => r.json())
+      .then((data) => { setActiveClasses(data); if (data.length === 1) setSelectedClassId(data[0].id); })
+      .catch(() => {});
+  }, []);
+
+  const search = useCallback(async (q: string) => {
+    if (q.length < 2) { setResults([]); setSearching(false); return; }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/members/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setResults(data);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => search(query), 250);
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
+  }, [query, search]);
+
+  const handleSelect = (member: MemberResult) => {
+    setSelected(member);
+    setResults([]);
+    setQuery("");
+    setCheckInState("idle");
+    inputRef.current?.blur();
+  };
+
+  const handleCheckIn = async () => {
+    if (!selected) return;
+    setCheckInState("loading");
+    try {
+      const res = await fetch("/api/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId: selected.id, classId: selectedClassId }),
+      });
+      if (res.ok) {
+        setCheckInState("success");
+        setTimeout(() => {
+          setSelected(null);
+          setCheckInState("idle");
+          inputRef.current?.focus();
+        }, 3000);
+      } else {
+        setCheckInState("error");
+      }
+    } catch {
+      setCheckInState("error");
+    }
+  };
+
+  const handleReset = () => {
+    setSelected(null);
+    setQuery("");
+    setResults([]);
+    setCheckInState("idle");
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const belt = selected?.beltRank ? BELT_STYLES[selected.beltRank.toLowerCase()] : null;
+
+  return (
+    <div className="min-h-screen flex flex-col items-center bg-gray-950 px-4 pt-12 pb-8">
+      {/* Header */}
+      <div className="mb-10 text-center">
+        <h1 className="text-4xl font-black tracking-tight text-white">BJJ Check-In</h1>
+        <p className="mt-1 text-gray-400 text-lg">Search by name to check in</p>
+        <Link
+          href="/enroll"
+          className="mt-4 inline-block px-5 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm font-medium text-gray-300 hover:text-white transition"
+        >
+          New member? Enroll here →
+        </Link>
+      </div>
+
+      {/* Search box */}
+      {!selected && (
+        <div className="w-full max-w-xl relative">
+          <div className="relative">
+            <svg
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              ref={inputRef}
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Type your name..."
+              className="w-full pl-12 pr-4 py-5 text-xl rounded-2xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+            />
+            {searching && (
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                <div className="w-5 h-5 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+
+          {/* Dropdown results */}
+          {results.length > 0 && (
+            <ul className="absolute top-full mt-2 w-full bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden z-10">
+              {results.map((m) => {
+                const statusStyle = STATUS_STYLES[m.status] ?? STATUS_STYLES.inactive;
+                const beltStyle = m.beltRank ? BELT_STYLES[m.beltRank.toLowerCase()] : null;
+                return (
+                  <li key={m.id}>
+                    <button
+                      onClick={() => handleSelect(m)}
+                      className="w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-700 transition text-left"
+                    >
+                      <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-gray-600">
+                        {m.photoUrl
+                          ? <Image src={m.photoUrl} alt={m.name} width={40} height={40} className="object-cover w-full h-full" />
+                          : <Initials name={m.name} />
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-white truncate">{m.name}</div>
+                        <div className="text-sm text-gray-400">{m.trainingType ?? "—"}</div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {beltStyle && (
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${beltStyle.bg} ${beltStyle.text}`}>
+                            {beltStyle.label}
+                          </span>
+                        )}
+                        <span className={`px-2 py-0.5 rounded border text-xs font-medium ${statusStyle.badge}`}>
+                          {statusStyle.label}
+                        </span>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {query.length >= 2 && !searching && results.length === 0 && (
+            <p className="mt-4 text-center text-gray-500">No members found for &ldquo;{query}&rdquo;</p>
+          )}
+        </div>
+      )}
+
+      {/* Member card */}
+      {selected && (
+        <div className="w-full max-w-sm">
+          <div
+            className={`rounded-3xl overflow-hidden shadow-2xl border transition-all duration-300 ${
+              checkInState === "success"
+                ? "border-green-500/60 shadow-green-500/20"
+                : checkInState === "error"
+                ? "border-red-500/60"
+                : "border-gray-700"
+            }`}
+          >
+            {/* Belt color bar */}
+            {belt && (
+              <div className={`h-2 w-full ${belt.bg}`} />
+            )}
+
+            <div className="bg-gray-900 p-8 flex flex-col items-center text-center gap-4">
+              {/* Avatar */}
+              <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-gray-700 flex-shrink-0">
+                {selected.photoUrl
+                  ? <Image src={selected.photoUrl} alt={selected.name} width={112} height={112} className="object-cover w-full h-full" />
+                  : <Initials name={selected.name} />
+                }
+              </div>
+
+              {/* Name */}
+              <div>
+                <h2 className="text-3xl font-bold text-white">{selected.name}</h2>
+                <div className="mt-2 flex items-center justify-center gap-2 flex-wrap">
+                  <BeltBadge rank={selected.beltRank} />
+                  {selected.ageGroup && (
+                    <span className="text-sm text-gray-400 capitalize">{selected.ageGroup}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Status */}
+              {(() => {
+                const s = STATUS_STYLES[selected.status] ?? STATUS_STYLES.inactive;
+                return (
+                  <span className={`px-3 py-1 rounded-full border text-sm font-medium ${s.badge}`}>
+                    {s.label}
+                  </span>
+                );
+              })()}
+
+              {/* Active class selector */}
+              {activeClasses.length > 0 && checkInState === "idle" && (
+                <div className="w-full">
+                  <p className="text-xs text-gray-500 mb-2 text-center">Checking into</p>
+                  <div className="flex flex-col gap-1.5">
+                    {activeClasses.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setSelectedClassId(selectedClassId === c.id ? null : c.id)}
+                        className={`w-full px-4 py-2.5 rounded-xl text-sm font-medium border transition ${
+                          selectedClassId === c.id
+                            ? "border-blue-500 bg-blue-600/20 text-blue-300"
+                            : "border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600"
+                        }`}
+                      >
+                        {c.name}
+                        {selectedClassId === c.id && " ✓"}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setSelectedClassId(null)}
+                      className={`w-full px-4 py-2 rounded-xl text-sm border transition ${
+                        selectedClassId === null
+                          ? "border-gray-500 bg-gray-700 text-gray-300"
+                          : "border-gray-800 text-gray-600 hover:border-gray-700"
+                      }`}
+                    >
+                      Open mat / no class
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Check-in button / states */}
+              {checkInState === "success" ? (
+                <div className="mt-2 flex flex-col items-center gap-2">
+                  <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <svg className="w-9 h-9 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <p className="text-green-400 font-semibold text-lg">Checked In!</p>
+                  <p className="text-gray-500 text-sm">See you on the mats</p>
+                </div>
+              ) : checkInState === "error" ? (
+                <div className="mt-2 flex flex-col items-center gap-3 w-full">
+                  <p className="text-red-400 font-medium">Check-in failed</p>
+                  <button
+                    onClick={handleCheckIn}
+                    className="w-full py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-lg transition"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleCheckIn}
+                  disabled={checkInState === "loading"}
+                  className="mt-2 w-full py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 text-white font-bold text-xl transition-colors"
+                >
+                  {checkInState === "loading" ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      Checking in…
+                    </span>
+                  ) : (
+                    "Check In"
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {checkInState !== "success" && (
+            <button
+              onClick={handleReset}
+              className="mt-5 w-full py-3 rounded-2xl text-gray-400 hover:text-white hover:bg-gray-800 text-sm font-medium transition"
+            >
+              ← Back to search
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

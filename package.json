@@ -1,0 +1,42 @@
+{
+  "name": "bjj-checkin",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:push": "dotenv -e .env.local -- prisma db push",
+    "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
+    "db:seed": "dotenv -e .env.local -- ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
+    "db:studio": "dotenv -e .env.local -- prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@stripe/react-stripe-js": "^6.6.0",
+    "@stripe/stripe-js": "^9.7.0",
+    "bcryptjs": "^3.0.3",
+    "next": "15.3.3",
+    "next-auth": "^5.0.0-beta.31",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "stripe": "^22.2.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.5.0",
+    "dotenv-cli": "^7.4.4",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.3",
+    "postcss": "^8",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5"
+  }
+}

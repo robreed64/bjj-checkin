@@ -1,0 +1,270 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Member {
+  id               Int       @id @default(autoincrement())
+  parentId         Int?      @map("parent_id")
+  parent           Member?   @relation("FamilyAccount", fields: [parentId], references: [id])
+  children         Member[]  @relation("FamilyAccount")
+  name             String
+  email            String?
+  phone            String?
+  address          String?
+  dateOfBirth      DateTime? @map("date_of_birth") @db.Date
+  ageGroup         String?   @map("age_group") // 'kids', 'adult'
+  beltRank         String?   @map("belt_rank") // 'white','blue','purple','brown','black'
+  trainingType     String?   @map("training_type") // 'Gi','No-Gi','Both'
+  photoUrl         String?   @map("photo_url")
+  status           String    @default("active") // 'active','past_due','canceled','inactive','lead','trial'
+  stripeCustomerId String?   @map("stripe_customer_id")
+  waiverSignedAt   DateTime? @map("waiver_signed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  subscriptions     Subscription[]
+  bookings          Booking[]
+  attendance        Attendance[]
+  sales             Sale[]
+  messages          Message[]
+  techniqueProgress TechniqueProgress[]
+  user              User?
+
+  @@map("members")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  role         String   @default("staff") // 'admin', 'staff'
+  memberId     Int?     @unique @map("member_id")
+  member       Member?  @relation(fields: [memberId], references: [id])
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model MembershipPlan {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String?
+  priceCents      Int      @map("price_cents")
+  billingInterval String   @map("billing_interval") @default("monthly")
+  classLimit      Int?     @map("class_limit")
+  planType        String   @map("plan_type") // 'gi','no-gi','family','kids','online','drop-in'
+  stripePriceId   String?  @map("stripe_price_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@map("membership_plans")
+}
+
+model Subscription {
+  id                   Int       @id @default(autoincrement())
+  memberId             Int       @map("member_id")
+  member               Member    @relation(fields: [memberId], references: [id])
+  planId               Int       @map("plan_id")
+  plan                 MembershipPlan @relation(fields: [planId], references: [id])
+  stripeSubscriptionId String?   @map("stripe_subscription_id")
+  status               String    // 'active','past_due','canceled'
+  startDate            DateTime  @map("start_date") @db.Date
+  endDate              DateTime? @map("end_date") @db.Date
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@map("subscriptions")
+}
+
+model Program {
+  id          Int      @id @default(autoincrement())
+  name        String
+  type        String   // 'gi','no-gi','youth','seminar','intro','private'
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  classes Class[]
+
+  @@map("programs")
+}
+
+model Class {
+  id             Int      @id @default(autoincrement())
+  programId      Int      @map("program_id")
+  program        Program  @relation(fields: [programId], references: [id])
+  name           String
+  startTime      DateTime @map("start_time")
+  endTime        DateTime @map("end_time")
+  instructorName String?  @map("instructor_name")
+  capacity       Int?
+  recurrenceRule String?  @map("recurrence_rule")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  bookings   Booking[]
+  attendance Attendance[]
+
+  @@map("classes")
+}
+
+model Booking {
+  id        Int      @id @default(autoincrement())
+  memberId  Int      @map("member_id")
+  member    Member   @relation(fields: [memberId], references: [id])
+  classId   Int      @map("class_id")
+  class     Class    @relation(fields: [classId], references: [id])
+  status    String   // 'booked','attended','no_show','canceled'
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("bookings")
+}
+
+model Attendance {
+  id        Int      @id @default(autoincrement())
+  memberId  Int      @map("member_id")
+  member    Member   @relation(fields: [memberId], references: [id])
+  classId   Int?     @map("class_id")
+  class     Class?   @relation(fields: [classId], references: [id])
+  timestamp DateTime @default(now())
+  source    String   // 'kiosk','staff','app'
+
+  @@map("attendance")
+}
+
+model Item {
+  id        Int      @id @default(autoincrement())
+  name      String
+  barcode   String?  @unique
+  priceCents Int     @map("price_cents")
+  taxRate   Decimal  @map("tax_rate") @db.Decimal(5, 2)
+  stock     Int?
+  category  String   // 'drinks','gear','events'
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  saleLineItems SaleLineItem[]
+
+  @@map("items")
+}
+
+model Sale {
+  id                   Int      @id @default(autoincrement())
+  memberId             Int?     @map("member_id")
+  member               Member?  @relation(fields: [memberId], references: [id])
+  totalCents           Int      @map("total_cents")
+  paymentMethodType    String   @map("payment_method_type") // 'card_on_file','new_card','cash'
+  stripePaymentIntentId String? @map("stripe_payment_intent_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  lineItems SaleLineItem[]
+
+  @@map("sales")
+}
+
+model SaleLineItem {
+  id            Int  @id @default(autoincrement())
+  saleId        Int  @map("sale_id")
+  sale          Sale @relation(fields: [saleId], references: [id])
+  itemId        Int  @map("item_id")
+  item          Item @relation(fields: [itemId], references: [id])
+  quantity      Int
+  unitPriceCents Int  @map("unit_price_cents")
+
+  @@map("sale_line_items")
+}
+
+model Workflow {
+  id          Int      @id @default(autoincrement())
+  name        String
+  triggerType String   @map("trigger_type") // 'trial_attendance','inactivity','birthday','failed_payment','promotion'
+  config      Json
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  messages Message[]
+
+  @@map("workflows")
+}
+
+model Message {
+  id         Int       @id @default(autoincrement())
+  memberId   Int       @map("member_id")
+  member     Member    @relation(fields: [memberId], references: [id])
+  channel    String    // 'email','sms','push','in_app'
+  subject    String?
+  body       String
+  sentAt     DateTime? @map("sent_at")
+  workflowId Int?      @map("workflow_id")
+  workflow   Workflow? @relation(fields: [workflowId], references: [id])
+
+  @@map("messages")
+}
+
+model BeltRequirement {
+  id            Int      @id @default(autoincrement())
+  beltRank      String   @map("belt_rank")
+  minClasses    Int      @map("min_classes")
+  minMonths     Int      @map("min_months")
+  minTechniques Int      @map("min_techniques")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("belt_requirements")
+}
+
+model TechniqueProgress {
+  id            Int      @id @default(autoincrement())
+  memberId      Int      @map("member_id")
+  member        Member   @relation(fields: [memberId], references: [id])
+  beltRank      String   @map("belt_rank")
+  techniqueName String   @map("technique_name")
+  mastered      Boolean  @default(false)
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([memberId, beltRank, techniqueName])
+  @@map("technique_progress")
+}
+
+model Curriculum {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  beltLevel   String?  @map("belt_level") // 'white','blue','purple','brown','black', or null for all
+  weeks       Int      @default(12)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  lessons CurriculumLesson[]
+
+  @@map("curricula")
+}
+
+model CurriculumLesson {
+  id           Int        @id @default(autoincrement())
+  curriculumId Int        @map("curriculum_id")
+  curriculum   Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  title        String
+  weekNumber   Int        @map("week_number")
+  dayOfWeek    String?    @map("day_of_week") // 'Monday','Wednesday', etc.
+  warmup       String?
+  techniques   Json       @default("[]") // [{name, description, videoUrl}]
+  notes        String?
+  position     Int        @default(0)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@map("curriculum_lessons")
+}
