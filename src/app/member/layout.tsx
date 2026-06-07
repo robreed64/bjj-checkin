@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { getGymSettings } from "@/lib/gym-settings";
 import LogoutButton from "../portal/LogoutButton";
 
 const NAV = [
@@ -12,17 +13,16 @@ const NAV = [
 ];
 
 export default async function MemberLayout({ children }: { children: ReactNode }) {
-  const session = await auth();
+  const [session, settings] = await Promise.all([auth(), getGymSettings()]);
   if (!session?.user) redirect("/login");
 
   const user = session.user;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col">
-      {/* Top bar */}
       <header className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-8">
-          <span className="text-base font-black tracking-tight">BJJ Member Portal</span>
+          <span className="text-base font-black tracking-tight">{settings.gymName} Member Portal</span>
           <nav className="flex items-center gap-1">
             {NAV.map((item) => (
               <Link

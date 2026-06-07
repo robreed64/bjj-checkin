@@ -268,3 +268,22 @@ model CurriculumLesson {
 
   @@map("curriculum_lessons")
 }
+
+model GymSettings {
+  id             Int      @id @default(1)
+  gymName        String   @default("My Gym") @map("gym_name")
+  gymEmail       String?  @map("gym_email")
+  gymPhone       String?  @map("gym_phone")
+  gymAddress     String?  @map("gym_address")
+  logoUrl        String?  @map("logo_url")
+  waiverText     String   @default("") @map("waiver_text") @db.Text
+  currency       String   @default("usd")
+  currencySymbol String   @default("$") @map("currency_symbol")
+  locale         String   @default("en-US")
+  timezone       String   @default("America/New_York")
+  defaultTaxRate Float    @default(0) @map("default_tax_rate")
+  setupComplete  Boolean  @default(false) @map("setup_complete")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("gym_settings")
+}

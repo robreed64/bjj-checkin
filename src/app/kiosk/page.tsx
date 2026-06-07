@@ -58,6 +58,12 @@ function Initials({ name }: { name: string }) {
 type ActiveClass = { id: number; name: string; startTime: string; endTime: string };
 
 export default function KioskPage() {
+  const [gymName, setGymName] = useState("BJJ Check-In");
+  useEffect(() => {
+    fetch("/api/settings/public").then(r => r.json()).then(d => {
+      if (d.gymName) setGymName(d.gymName + " Check-In");
+    }).catch(() => {});
+  }, []);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MemberResult[]>([]);
   const [selected, setSelected] = useState<MemberResult | null>(null);
@@ -139,7 +145,7 @@ export default function KioskPage() {
     <div className="min-h-screen flex flex-col items-center bg-gray-950 px-4 pt-12 pb-8">
       {/* Header */}
       <div className="mb-10 text-center">
-        <h1 className="text-4xl font-black tracking-tight text-white">BJJ Check-In</h1>
+        <h1 className="text-4xl font-black tracking-tight text-white">{gymName}</h1>
         <p className="mt-1 text-gray-400 text-lg">Search by name to check in</p>
         <Link
           href="/enroll"

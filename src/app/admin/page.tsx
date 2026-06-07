@@ -1,2 +1,8 @@
 import { redirect } from "next/navigation";
-export default function AdminRoot() { redirect("/admin/members"); }
+import { getGymSettings } from "@/lib/gym-settings";
+
+export default async function AdminRoot() {
+  const settings = await getGymSettings();
+  if (!settings.setupComplete) redirect("/admin/setup");
+  redirect("/admin/members");
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, Suspense } from "react";
+import { useState, useEffect, FormEvent, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -22,11 +22,18 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl  = searchParams.get("callbackUrl") ?? "/dashboard";
 
-  const [email,       setEmail]       = useState("");
-  const [password,    setPassword]    = useState("");
-  const [showPw,      setShowPw]      = useState(false);
-  const [error,       setError]       = useState("");
-  const [loading,     setLoading]     = useState(false);
+  const [gymName,   setGymName]  = useState("BJJ Admin");
+  const [email,     setEmail]    = useState("");
+  const [password,  setPassword] = useState("");
+  const [showPw,    setShowPw]   = useState(false);
+  const [error,     setError]    = useState("");
+  const [loading,   setLoading]  = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings/public").then(r => r.json()).then(d => {
+      if (d.gymName) setGymName(d.gymName);
+    }).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -57,7 +64,7 @@ function LoginForm() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-black tracking-tight text-white">BJJ Admin</h1>
+          <h1 className="text-3xl font-black tracking-tight text-white">{gymName}</h1>
           <p className="text-gray-500 mt-2 text-sm">Sign in to your account</p>
         </div>
 
@@ -77,7 +84,7 @@ function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm transition"
-              placeholder="admin@bjj.local"
+              placeholder="you@example.com"
             />
           </div>
 
@@ -113,10 +120,6 @@ function LoginForm() {
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
-
-        <p className="text-center text-xs text-gray-600 mt-4">
-          admin@bjj.local / admin1234
-        </p>
       </div>
     </div>
   );

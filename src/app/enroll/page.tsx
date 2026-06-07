@@ -60,6 +60,7 @@ export default function EnrollPage() {
   const [submitting, setSubmitting] = useState(false);
   const [newMemberId, setNewMemberId] = useState<number | null>(null);
   const [errors, setErrors] = useState<Partial<FormData>>({});
+  const [waiverText, setWaiverText] = useState(WAIVER_TEXT);
 
   const [form, setForm] = useState<FormData>({
     name: "", email: "", phone: "", dateOfBirth: "",
@@ -69,6 +70,9 @@ export default function EnrollPage() {
 
   useEffect(() => {
     fetch("/api/plans").then((r) => r.json()).then(setPlans);
+    fetch("/api/admin/settings").then(r => r.json()).then(d => {
+      if (d.waiverText) setWaiverText(d.waiverText);
+    }).catch(() => {});
   }, []);
 
   const set = (field: keyof FormData, value: string | number | null) =>
@@ -240,7 +244,7 @@ export default function EnrollPage() {
             <div className="space-y-5">
               <h2 className="text-2xl font-bold">Participation Agreement</h2>
               <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 h-64 overflow-y-auto text-sm text-gray-300 leading-relaxed whitespace-pre-line">
-                {WAIVER_TEXT}
+                {waiverText}
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-300 mb-2">Signature</p>

@@ -1,15 +1,16 @@
 import { type ReactNode } from "react";
 import { auth } from "@/auth";
+import { getGymSettings } from "@/lib/gym-settings";
 import LogoutButton from "./LogoutButton";
 
 export default async function PortalLayout({ children }: { children: ReactNode }) {
-  const session = await auth();
-  const user    = session?.user;
+  const [session, settings] = await Promise.all([auth(), getGymSettings()]);
+  const user = session?.user;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <header className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <span className="text-lg font-black tracking-tight">BJJ Family Portal</span>
+        <span className="text-lg font-black tracking-tight">{settings.gymName} Family Portal</span>
         {user && (
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-400">Welcome, <span className="text-white font-medium">{user.name}</span></span>
