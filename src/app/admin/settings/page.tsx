@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 
 type GymSettings = {
   gymName: string;
@@ -57,6 +58,7 @@ function SaveButton({ loading, status }: { loading: boolean; status: "idle" | "l
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [settings, setSettings] = useState<GymSettings | null>(null);
 
   // Password change state
@@ -98,6 +100,7 @@ export default function SettingsPage() {
     setStatus("loading");
     const ok = await patch(fields);
     setStatus(ok ? "ok" : "error");
+    if (ok) router.refresh();
     setTimeout(() => setStatus("idle"), 2500);
   };
 

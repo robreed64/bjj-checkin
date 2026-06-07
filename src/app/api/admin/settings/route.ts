@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getGymSettings } from "@/lib/gym-settings";
@@ -40,6 +41,8 @@ export async function PATCH(req: Request) {
     update: data,
     create: { id: 1, ...data },
   });
+
+  revalidatePath("/", "layout");
 
   return NextResponse.json(settings);
 }
