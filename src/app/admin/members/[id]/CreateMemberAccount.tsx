@@ -13,13 +13,17 @@ export default function CreateMemberAccount({
   existingEmail: string | null;
 }) {
   const router = useRouter();
-  const [open,      setOpen]      = useState(false);
-  const [email,     setEmail]     = useState(existingEmail ?? "");
-  const [password,  setPassword]  = useState("");
-  const [showPw,    setShowPw]    = useState(false);
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState<string | null>(null);
-  const [removing,  setRemoving]  = useState(false);
+  const [open,          setOpen]          = useState(false);
+  const [resetOpen,     setResetOpen]     = useState(false);
+  const [email,         setEmail]         = useState(existingEmail ?? "");
+  const [password,      setPassword]      = useState("");
+  const [resetPw,       setResetPw]       = useState("");
+  const [showPw,        setShowPw]        = useState(false);
+  const [saving,        setSaving]        = useState(false);
+  const [resetSaving,   setResetSaving]   = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
+  const [resetError,    setResetError]    = useState<string | null>(null);
+  const [removing,      setRemoving]      = useState(false);
 
   const hasAccount = !!existingEmail;
 
@@ -50,6 +54,19 @@ export default function CreateMemberAccount({
     router.refresh();
   };
 
+  const resetPassword = async () => {
+    if (resetPw.length < 8) { setResetError("Minimum 8 characters"); return; }
+    setResetSaving(true); setResetError(null);
+    const res = await fetch(`/api/admin/members/${memberId}/portal-account`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: resetPw }),
+    });
+    setResetSaving(false);
+    if (res.ok) { setResetOpen(false); setResetPw(""); }
+    else { const d = await res.json(); setResetError(d.error ?? "Failed"); }
+  };
+
   return (
     <>
       <div className="flex items-center gap-2">
@@ -58,6 +75,10 @@ export default function CreateMemberAccount({
             <span className="text-xs text-green-400 bg-green-900/30 px-2 py-1 rounded-lg">
               Portal: {existingEmail}
             </span>
+            <button onClick={() => { setResetOpen(true); setResetPw(""); setResetError(null); }}
+              className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition">
+              Reset Password
+            </button>
             <button onClick={remove} disabled={removing}
               className="text-xs px-3 py-1.5 rounded-lg bg-red-900/40 text-red-400 hover:bg-red-800 hover:text-white transition disabled:opacity-40">
               {removing ? "Removing…" : "Remove Access"}
@@ -118,6 +139,40 @@ export default function CreateMemberAccount({
                 {saving ? "Creating…" : "Create Account"}
               </button>
               <button onClick={() => setOpen(false)}
+                className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6">
+            <h2 className="text-base font-bold text-white mb-4">Reset Portal Password</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Set a new password for <strong className="text-white">{memberName}</strong>&apos;s portal account.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={resetPw}
+                  onChange={e => setResetPw(e.target.value)}
+                  placeholder="Min. 8 characters"
+                  className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500 transition"
+                />
+              </div>
+              {resetError && <p className="text-sm text-red-400">{resetError}</p>}
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={resetPassword} disabled={resetSaving}
+                className="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm transition">
+                {resetSaving ? "Saving…" : "Save Password"}
+              </button>
+              <button onClick={() => setResetOpen(false)}
                 className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition">
                 Cancel
               </button>

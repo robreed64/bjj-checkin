@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import POSTerminal from "./POSTerminal";
+import { getGymSettings } from "@/lib/gym-settings";
 
 export default async function POSPage() {
-  const items = await prisma.item.findMany({
-    orderBy: [{ category: "asc" }, { name: "asc" }],
-  });
+  const [items, settings] = await Promise.all([
+    prisma.item.findMany({ orderBy: [{ category: "asc" }, { name: "asc" }] }),
+    getGymSettings(),
+  ]);
+  const categories = (settings.posCategories as string[] | null) ?? ["drinks", "gear", "events"];
 
   return (
     <div className="flex flex-col h-screen">
@@ -26,7 +29,7 @@ export default async function POSPage() {
 
       {/* Terminal — fills remaining height */}
       <div className="flex-1 overflow-hidden">
-        <POSTerminal initialItems={items.map((i) => ({
+        <POSTerminal categories={categories} initialItems={items.map((i) => ({
           id:         i.id,
           name:       i.name,
           priceCents: i.priceCents,

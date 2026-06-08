@@ -35,13 +35,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
     } catch { /* non-fatal */ }
   }
 
+  // If price or interval changed and plan is Stripe-linked, archive old price + create new one
+  let stripePriceId = existing.stripePriceId;
+  if (stripe && existing.stripePriceId && (body.priceCents !== undefined || body.billingInterval !== undefined)) {
+    try {
+      await stripe.prices.update(existing.stripePriceId, { active: false });
+      const newPrice = await stripe.prices.create({
+        currency: "usd",
+        unit_amount: body.priceCents ?? existing.priceCents,
+        recurring: { interval: (body.billingInterval ?? existing.billingInterval) === "yearly" ? "year" : "month" },
+        product: (await stripe.prices.retrieve(existing.stripePriceId)).product as string,
+      });
+      stripePriceId = newPrice.id;
+    } catch { /* non-fatal */ }
+  }
+
   const plan = await prisma.membershipPlan.update({
     where: { id: planId },
     data: {
-      name:        body.name        ?? existing.name,
-      description: body.description ?? existing.description,
-      planType:    body.planType    ?? existing.planType,
-      classLimit:  body.classLimit  ?? existing.classLimit,
+      name:            body.name            ?? existing.name,
+      description:     body.description     ?? existing.description,
+      planType:        body.planType        ?? existing.planType,
+      classLimit:      body.classLimit      !== undefined ? body.classLimit : existing.classLimit,
+      priceCents:      body.priceCents      ?? existing.priceCents,
+      billingInterval: body.billingInterval ?? existing.billingInterval,
+      stripePriceId,
     },
   });
 

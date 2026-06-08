@@ -23,6 +23,7 @@ model Member {
   photoUrl         String?   @map("photo_url")
   status           String    @default("active") // 'active','past_due','canceled','inactive','lead','trial'
   stripeCustomerId String?   @map("stripe_customer_id")
+  beltStripes      Int       @default(0) @map("belt_stripes")
   waiverSignedAt   DateTime? @map("waiver_signed_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
@@ -286,6 +287,9 @@ model GymSettings {
   stripePublishableKey String?  @map("stripe_publishable_key")
   stripeSecretKey      String?  @map("stripe_secret_key")
   stripeWebhookSecret  String?  @map("stripe_webhook_secret")
+  beltConfig           Json     @default("[]") @map("belt_config")
+  instructorNames      Json     @default("[]") @map("instructor_names")
+  posCategories        Json     @default("[\"drinks\",\"gear\",\"events\"]") @map("pos_categories")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("gym_settings")

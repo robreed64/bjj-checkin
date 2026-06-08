@@ -5,7 +5,10 @@ import DeleteMemberButton from "./DeleteMemberButton";
 import ProgressionSection from "./ProgressionSection";
 import FamilyManager from "./FamilyManager";
 import CreateMemberAccount from "./CreateMemberAccount";
+import AttendanceManager from "./AttendanceManager";
+import BeltStripesEditor from "./BeltStripesEditor";
 import { getNextBelt } from "@/lib/belt-data";
+import { getGymSettings } from "@/lib/gym-settings";
 
 const BELT_STYLES: Record<string, { bg: string; text: string }> = {
   white:  { bg: "bg-white",      text: "text-gray-900" },
@@ -31,17 +34,20 @@ export default async function MemberDetailPage({ params }: { params: Params }) {
   const memberId = parseInt(id, 10);
   if (isNaN(memberId)) notFound();
 
-  const member = await prisma.member.findUnique({
-    where: { id: memberId },
-    include: {
-      subscriptions: { include: { plan: true }, orderBy: { createdAt: "desc" }, take: 1 },
-      attendance: { orderBy: { timestamp: "desc" }, take: 20, include: { class: true } },
-      children: { select: { id: true, name: true, beltRank: true, status: true } },
-      parent: { select: { id: true, name: true } },
-      user:   { select: { email: true, role: true } },
-      _count: { select: { attendance: true } },
-    },
-  });
+  const [member, gymSettings] = await Promise.all([
+    prisma.member.findUnique({
+      where: { id: memberId },
+      include: {
+        subscriptions: { include: { plan: true }, orderBy: { createdAt: "desc" }, take: 1 },
+        attendance: { orderBy: { timestamp: "desc" }, take: 20, include: { class: true } },
+        children: { select: { id: true, name: true, beltRank: true, status: true } },
+        parent: { select: { id: true, name: true } },
+        user:   { select: { email: true, role: true } },
+        _count: { select: { attendance: true } },
+      },
+    }),
+    getGymSettings(),
+  ]);
 
   if (!member) notFound();
 
@@ -58,6 +64,11 @@ export default async function MemberDetailPage({ params }: { params: Params }) {
   const belt = member.beltRank ? BELT_STYLES[member.beltRank.toLowerCase()] : null;
   const pill = STATUS_PILL[member.status] ?? STATUS_PILL.inactive;
   const sub  = member.subscriptions[0];
+
+  // Belt stripes config
+  const beltConfig = (gymSettings.beltConfig as Array<{ key: string; maxStripes: number }> | null) ?? [];
+  const beltEntry = beltConfig.find(b => b.key === member.beltRank?.toLowerCase());
+  const maxStripes = beltEntry ? beltEntry.maxStripes : (member.beltRank ? 4 : 0);
 
   function initials(name: string) {
     const p = name.trim().split(" ");
@@ -91,6 +102,13 @@ export default async function MemberDetailPage({ params }: { params: Params }) {
               <span className={`px-3 py-1 rounded-full text-sm font-semibold ${belt.bg} ${belt.text}`}>
                 {member.beltRank ? member.beltRank.charAt(0).toUpperCase() + member.beltRank.slice(1) : ""} Belt
               </span>
+            )}
+            {maxStripes > 0 && (
+              <BeltStripesEditor
+                memberId={member.id}
+                currentStripes={member.beltStripes}
+                maxStripes={maxStripes}
+              />
             )}
             {member.ageGroup && (
               <span className="text-sm text-gray-400 capitalize">{member.ageGroup}</span>
@@ -169,28 +187,17 @@ export default async function MemberDetailPage({ params }: { params: Params }) {
       />
 
       {/* Recent attendance */}
-      <Section title="Recent check-ins" className="mt-6">
-        {member.attendance.length === 0 ? (
-          <p className="text-gray-500 text-sm">No check-ins yet</p>
-        ) : (
-          <div className="divide-y divide-gray-800">
-            {member.attendance.map((a) => (
-              <div key={a.id} className="py-2.5 flex items-center justify-between text-sm">
-                <div>
-                  <span className="text-white">{a.class?.name ?? "Open mat"}</span>
-                  <span className="ml-2 text-gray-500 text-xs capitalize">{a.source}</span>
-                </div>
-                <span className="text-gray-400">
-                  {a.timestamp.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}{" "}
-                  <span className="text-gray-600">
-                    {a.timestamp.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                  </span>
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mt-6">
+        <AttendanceManager
+          memberId={member.id}
+          initialAttendance={member.attendance.map(a => ({
+            id: a.id,
+            timestamp: a.timestamp.toISOString(),
+            source: a.source,
+            className: a.class?.name ?? null,
+          }))}
+        />
+      </div>
     </div>
   );
 }

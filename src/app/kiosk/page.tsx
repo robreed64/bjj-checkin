@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import KioskExitModal from "./KioskExitModal";
 
 type MemberResult = {
   id: number;
@@ -59,10 +60,30 @@ type ActiveClass = { id: number; name: string; startTime: string; endTime: strin
 
 export default function KioskPage() {
   const [gymName, setGymName] = useState("BJJ Check-In");
+  const [showExit, setShowExit] = useState(false);
+
   useEffect(() => {
     fetch("/api/settings/public").then(r => r.json()).then(d => {
       if (d.gymName) setGymName(d.gymName + " Check-In");
     }).catch(() => {});
+  }, []);
+
+  // Fullscreen lock
+  useEffect(() => {
+    try { document.documentElement.requestFullscreen().catch(() => {}); } catch {}
+
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    // Push a state so back button is absorbed
+    history.pushState(null, "", window.location.href);
+    const onPopState = () => history.pushState(null, "", window.location.href);
+    window.addEventListener("popstate", onPopState);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("popstate", onPopState);
+    };
   }, []);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MemberResult[]>([]);
@@ -142,7 +163,23 @@ export default function KioskPage() {
   const belt = selected?.beltRank ? BELT_STYLES[selected.beltRank.toLowerCase()] : null;
 
   return (
-    <div className="min-h-screen flex flex-col items-center bg-gray-950 px-4 pt-12 pb-8">
+    <div className="min-h-screen flex flex-col items-center bg-gray-950 px-4 pt-12 pb-8 relative">
+      {/* Hidden admin exit button — top-right corner, visible on hover */}
+      <div className="absolute top-3 right-3 group">
+        <button
+          onClick={() => setShowExit(true)}
+          className="w-9 h-9 rounded-full flex items-center justify-center text-transparent group-hover:text-gray-600 transition-colors duration-500"
+          aria-label="Admin exit"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </button>
+      </div>
+
+      {showExit && <KioskExitModal onClose={() => setShowExit(false)} />}
+
       {/* Header */}
       <div className="mb-10 text-center">
         <h1 className="text-4xl font-black tracking-tight text-white">{gymName}</h1>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 type Program = { id: number; name: string; type: string };
+type GymSettings = { instructorNames?: string[] };
 
 type FormState = {
   name: string;
@@ -31,9 +32,10 @@ const RECURRENCE_OPTIONS = [
 
 export default function ClassForm({ initialValues, classId }: Props) {
   const router  = useRouter();
-  const [programs, setPrograms] = useState<Program[]>([]);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [programs, setPrograms]             = useState<Program[]>([]);
+  const [instructorNames, setInstructorNames] = useState<string[]>([]);
+  const [saving, setSaving]                 = useState(false);
+  const [error, setError]                   = useState<string | null>(null);
 
   const [form, setForm] = useState<FormState>({
     name:           initialValues?.name           ?? "",
@@ -48,6 +50,9 @@ export default function ClassForm({ initialValues, classId }: Props) {
 
   useEffect(() => {
     fetch("/api/admin/programs").then((r) => r.json()).then(setPrograms);
+    fetch("/api/admin/settings").then(r => r.json()).then((d: GymSettings) => {
+      if (Array.isArray(d.instructorNames)) setInstructorNames(d.instructorNames);
+    }).catch(() => {});
     // Set today's date client-side only to avoid server/client timezone mismatch
     if (!initialValues?.date) {
       setForm((f) => ({ ...f, date: new Date().toLocaleDateString("en-CA") }));
@@ -115,8 +120,19 @@ export default function ClassForm({ initialValues, classId }: Props) {
           </select>
         </Field>
         <Field label="Instructor">
-          <input type="text" placeholder="Instructor name" value={form.instructorName}
-            onChange={(e) => set("instructorName", e.target.value)} className={inp} />
+          <input
+            type="text"
+            list="instructor-names-list"
+            placeholder="Instructor name"
+            value={form.instructorName}
+            onChange={(e) => set("instructorName", e.target.value)}
+            className={inp}
+          />
+          {instructorNames.length > 0 && (
+            <datalist id="instructor-names-list">
+              {instructorNames.map(n => <option key={n} value={n} />)}
+            </datalist>
+          )}
         </Field>
       </div>
 

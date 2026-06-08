@@ -26,7 +26,7 @@ export default function EditPlanPage() {
   const id     = params?.id;
 
   const [plan,   setPlan]   = useState<Plan | null>(null);
-  const [form,   setForm]   = useState({ name: "", description: "", planType: "gi", classLimit: "" });
+  const [form,   setForm]   = useState({ name: "", description: "", planType: "gi", classLimit: "", priceStr: "", billingInterval: "monthly" });
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
 
@@ -37,10 +37,12 @@ export default function EditPlanPage() {
       .then((p: Plan) => {
         setPlan(p);
         setForm({
-          name:        p.name,
-          description: p.description ?? "",
-          planType:    p.planType,
-          classLimit:  p.classLimit != null ? String(p.classLimit) : "",
+          name:            p.name,
+          description:     p.description ?? "",
+          planType:        p.planType,
+          classLimit:      p.classLimit != null ? String(p.classLimit) : "",
+          priceStr:        (p.priceCents / 100).toFixed(2),
+          billingInterval: p.billingInterval,
         });
       })
       .catch(() => setError("Failed to load plan."));
@@ -52,14 +54,17 @@ export default function EditPlanPage() {
     if (!form.name) { setError("Name is required."); return; }
     setSaving(true);
     setError(null);
+    const priceCents = Math.round(parseFloat(form.priceStr || "0") * 100);
     const res = await fetch(`/api/admin/plans/${id}`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
-        name:        form.name,
-        description: form.description || null,
-        planType:    form.planType,
-        classLimit:  form.classLimit ? parseInt(form.classLimit, 10) : null,
+        name:            form.name,
+        description:     form.description || null,
+        planType:        form.planType,
+        classLimit:      form.classLimit ? parseInt(form.classLimit, 10) : null,
+        priceCents,
+        billingInterval: form.billingInterval,
       }),
     });
     setSaving(false);
@@ -100,13 +105,26 @@ export default function EditPlanPage() {
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Price (USD)" hint="Cannot be changed">
-              <input readOnly value={`$${(plan.priceCents / 100).toFixed(2)}`} className={readOnly} />
+            <Field label="Price (USD)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.priceStr}
+                onChange={e => set("priceStr", e.target.value)}
+                className={input}
+              />
             </Field>
-            <Field label="Billing Interval" hint="Cannot be changed">
-              <input readOnly value={plan.billingInterval} className={`${readOnly} capitalize`} />
+            <Field label="Billing Interval">
+              <select value={form.billingInterval} onChange={e => set("billingInterval", e.target.value)} className={input}>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+              </select>
             </Field>
           </div>
+          {plan.stripePriceId && (
+            <p className="text-xs text-yellow-500">⚠ Changing price or interval will archive the old Stripe price and create a new one. Existing subscriptions continue on the old price until renewed.</p>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Field label="Plan Type *">
@@ -119,10 +137,6 @@ export default function EditPlanPage() {
                 onChange={(e) => set("classLimit", e.target.value)} className={input} />
             </Field>
           </div>
-
-          {plan.stripePriceId && (
-            <p className="text-xs text-green-400">● Stripe synced — name and description will be updated in Stripe.</p>
-          )}
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
 

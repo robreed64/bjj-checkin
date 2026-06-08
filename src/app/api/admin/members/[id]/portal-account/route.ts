@@ -37,6 +37,27 @@ export async function POST(req: Request, { params }: { params: Params }) {
   return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
 }
 
+export async function PATCH(req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("members");
+  if (error) return error;
+
+  const { id } = await params;
+  const memberId = parseInt(id, 10);
+  if (isNaN(memberId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+
+  const { password } = await req.json();
+  if (!password || password.length < 8) {
+    return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+  }
+
+  const user = await prisma.user.findFirst({ where: { memberId, role: "member" } });
+  if (!user) return NextResponse.json({ error: "No portal account found" }, { status: 404 });
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(_req: Request, { params }: { params: Params }) {
   const { id } = await params;
   const memberId = parseInt(id, 10);

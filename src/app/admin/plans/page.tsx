@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
+import DeletePlanButton from "./DeletePlanButton";
 
 export default async function PlansPage() {
   const [plans, stripeClient] = await Promise.all([
@@ -72,6 +73,7 @@ export default async function PlansPage() {
                   >
                     Edit
                   </Link>
+                  <DeletePlanButton planId={plan.id} planName={plan.name} />
                 </td>
               </tr>
             ))}

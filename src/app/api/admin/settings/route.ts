@@ -22,6 +22,8 @@ export async function PATCH(req: Request) {
     "gymName", "gymEmail", "gymPhone", "gymAddress", "logoUrl",
     "waiverText", "currency", "currencySymbol", "locale", "timezone",
     "defaultTaxRate", "setupComplete",
+    "beltConfig", "instructorNames", "posCategories",
+    "stripePublishableKey", "stripeSecretKey", "stripeWebhookSecret",
   ];
   const data: Record<string, unknown> = {};
   for (const key of allowed) {

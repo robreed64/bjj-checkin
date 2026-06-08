@@ -37,6 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
       ...(body.trainingType!== undefined && { trainingType: body.trainingType || null }),
       ...(body.status      !== undefined && { status: body.status }),
       ...(body.photoUrl    !== undefined && { photoUrl: body.photoUrl || null }),
+      ...(body.beltStripes !== undefined && { beltStripes: Number(body.beltStripes) }),
     },
   });
   return NextResponse.json(member);

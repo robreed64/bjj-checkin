@@ -9,26 +9,35 @@ type Item = {
 type CartLine  = { item: Item; quantity: number };
 type Member    = { id: number; name: string; stripeCustomerId: string | null };
 
-const CATEGORIES = ["drinks", "gear", "events"] as const;
-const CAT_LABEL: Record<string, string> = { drinks: "Drinks", gear: "Gear", events: "Events" };
-const CAT_COLOR: Record<string, string> = {
-  drinks: "bg-cyan-900/40 hover:bg-cyan-800/60 border-cyan-800",
-  gear:   "bg-violet-900/40 hover:bg-violet-800/60 border-violet-800",
-  events: "bg-amber-900/40 hover:bg-amber-800/60 border-amber-800",
-};
-const CAT_TAB: Record<string, string> = {
-  drinks: "data-[active=true]:bg-cyan-700",
-  gear:   "data-[active=true]:bg-violet-700",
-  events: "data-[active=true]:bg-amber-700",
-};
+// Cycling color palette for dynamic categories
+const PALETTE_TAB = [
+  "data-[active=true]:bg-cyan-700",
+  "data-[active=true]:bg-violet-700",
+  "data-[active=true]:bg-amber-700",
+  "data-[active=true]:bg-green-700",
+  "data-[active=true]:bg-rose-700",
+  "data-[active=true]:bg-sky-700",
+];
+const PALETTE_CARD = [
+  "bg-cyan-900/40 hover:bg-cyan-800/60 border-cyan-800",
+  "bg-violet-900/40 hover:bg-violet-800/60 border-violet-800",
+  "bg-amber-900/40 hover:bg-amber-800/60 border-amber-800",
+  "bg-green-900/40 hover:bg-green-800/60 border-green-800",
+  "bg-rose-900/40 hover:bg-rose-800/60 border-rose-800",
+  "bg-sky-900/40 hover:bg-sky-800/60 border-sky-800",
+];
+
+function catLabel(slug: string) {
+  return slug.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
 
 function fmt(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-export default function POSTerminal({ initialItems }: { initialItems: Item[] }) {
+export default function POSTerminal({ initialItems, categories }: { initialItems: Item[]; categories: string[] }) {
   const [items]       = useState<Item[]>(initialItems);
-  const [tab, setTab] = useState<string>("drinks");
+  const [tab, setTab] = useState<string>(categories[0] ?? "drinks");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [memberQ, setMemberQ]     = useState("");
   const [memberResults, setMemberResults] = useState<Member[]>([]);
@@ -119,15 +128,15 @@ export default function POSTerminal({ initialItems }: { initialItems: Item[] }) 
       {/* Left — items */}
       <div className="flex-1 flex flex-col min-w-0 border-r border-gray-800">
         {/* Category tabs */}
-        <div className="flex gap-1 p-4 border-b border-gray-800 bg-gray-900/60">
-          {CATEGORIES.map((cat) => (
+        <div className="flex gap-1 p-4 border-b border-gray-800 bg-gray-900/60 flex-wrap">
+          {categories.map((cat, i) => (
             <button
               key={cat}
               data-active={tab === cat}
               onClick={() => setTab(cat)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${CAT_TAB[cat]} data-[active=true]:text-white text-gray-400 hover:text-white hover:bg-gray-800`}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${PALETTE_TAB[i % PALETTE_TAB.length]} data-[active=true]:text-white text-gray-400 hover:text-white hover:bg-gray-800`}
             >
-              {CAT_LABEL[cat]}
+              {catLabel(cat)}
             </button>
           ))}
         </div>
@@ -143,7 +152,7 @@ export default function POSTerminal({ initialItems }: { initialItems: Item[] }) 
                   key={item.id}
                   onClick={() => addToCart(item)}
                   disabled={item.stock === 0}
-                  className={`border rounded-xl p-4 text-left transition disabled:opacity-40 disabled:cursor-not-allowed ${CAT_COLOR[item.category] ?? "bg-gray-800 hover:bg-gray-700 border-gray-700"}`}
+                  className={`border rounded-xl p-4 text-left transition disabled:opacity-40 disabled:cursor-not-allowed ${PALETTE_CARD[categories.indexOf(item.category) % PALETTE_CARD.length] ?? "bg-gray-800 hover:bg-gray-700 border-gray-700"}`}
                 >
                   <p className="font-semibold text-white text-sm leading-snug">{item.name}</p>
                   <p className="text-lg font-bold text-white mt-1">{fmt(item.priceCents)}</p>

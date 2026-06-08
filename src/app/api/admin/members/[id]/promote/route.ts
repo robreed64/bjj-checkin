@@ -18,7 +18,7 @@ export async function POST(_req: Request, { params }: { params: Params }) {
 
   const updated = await prisma.member.update({
     where: { id: memberId },
-    data: { beltRank: nextBelt },
+    data: { beltRank: nextBelt, beltStripes: 0 },
   });
 
   return NextResponse.json({ beltRank: updated.beltRank });
