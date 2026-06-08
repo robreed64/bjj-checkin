@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function GET() {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   const plans = await prisma.membershipPlan.findMany({ orderBy: { priceCents: "asc" } });
   return NextResponse.json(plans);
 }
 
 export async function POST(req: NextRequest) {
+  const { error } = await requireAuth("plans");
+  if (error) return error;
   const { name, description, priceCents, billingInterval, planType, classLimit } = await req.json();
 
   if (!name || !priceCents || !planType) {

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
+import { requireAuth } from "@/lib/require-auth";
 
 type Params = Promise<{ id: string }>;
 
 export async function GET(_req: NextRequest, { params }: { params: Params }) {
+  const { error } = await requireAuth("members");
+  if (error) return error;
+
   const { id } = await params;
   const member = await prisma.member.findUnique({ where: { id: parseInt(id, 10) } });
   if (!member) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -12,6 +16,9 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
+  const { error } = await requireAuth("members");
+  if (error) return error;
+
   const { id } = await params;
   const memberId = parseInt(id, 10);
   if (isNaN(memberId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
@@ -36,6 +43,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Params }) {
+  const { error } = await requireAuth("members");
+  if (error) return error;
+
   const { id } = await params;
   const memberId = parseInt(id, 10);
   if (isNaN(memberId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });

@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { requireAuth } from "@/lib/require-auth";
 
 // POST — create a portal (parent) user account for a member
 export async function POST(req: Request) {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   const { memberId, email, password } = await req.json();
 
   if (!memberId || !email || !password) {

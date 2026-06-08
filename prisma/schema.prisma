@@ -43,7 +43,7 @@ model User {
   email        String   @unique
   name         String
   passwordHash String   @map("password_hash")
-  role         String   @default("staff") // 'admin', 'staff'
+  role         String   @default("staff") // 'admin', 'manager', 'front_desk', 'staff', 'member', 'parent'
   memberId     Int?     @unique @map("member_id")
   member       Member?  @relation(fields: [memberId], references: [id])
   createdAt    DateTime @default(now()) @map("created_at")

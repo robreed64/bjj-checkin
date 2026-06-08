@@ -2,24 +2,14 @@ import Link from "next/link";
 import { type ReactNode } from "react";
 import { auth } from "@/auth";
 import { getGymSettings } from "@/lib/gym-settings";
+import { navForRole } from "@/lib/permissions";
 import LogoutButton from "./LogoutButton";
-
-const NAV = [
-  { href: "/admin/members",    label: "Members",    icon: "👥" },
-  { href: "/admin/plans",      label: "Plans",      icon: "💳" },
-  { href: "/admin/schedule",   label: "Schedule",   icon: "📅" },
-  { href: "/admin/belts",      label: "Belts",      icon: "🥋" },
-  { href: "/admin/curriculum", label: "Curriculum", icon: "📖" },
-  { href: "/admin/families",   label: "Families",   icon: "👨‍👩‍👧" },
-  { href: "/admin/pos",        label: "POS",        icon: "🛒" },
-  { href: "/admin/marketing",  label: "Marketing",  icon: "📣" },
-  { href: "/admin/reports",    label: "Reports",    icon: "📊" },
-  { href: "/kiosk",            label: "Kiosk",      icon: "📲" },
-];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const [session, settings] = await Promise.all([auth(), getGymSettings()]);
   const user = session?.user;
+  const role = (user as { role?: string } | undefined)?.role;
+  const nav = navForRole(role);
 
   return (
     <div className="flex min-h-screen bg-gray-950 text-white">
@@ -29,7 +19,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <span className="text-lg font-black tracking-tight">{settings.gymName}</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -43,10 +33,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         {user && (
           <div className="px-4 py-4 border-t border-gray-800">
             <p className="text-xs font-medium text-gray-300 truncate">{user.name}</p>
-            <p className="text-xs text-gray-600 truncate">{(user as { role?: string }).role ?? "staff"}</p>
-            <Link href="/admin/settings" className="block text-xs text-gray-500 hover:text-gray-300 transition mt-1 mb-2">
-              Settings
-            </Link>
+            <p className="text-xs text-gray-600 truncate capitalize">{role ?? "staff"}</p>
+            {role === "admin" && (
+              <Link href="/admin/settings" className="block text-xs text-gray-500 hover:text-gray-300 transition mt-1 mb-2">
+                Settings
+              </Link>
+            )}
             <LogoutButton />
           </div>
         )}

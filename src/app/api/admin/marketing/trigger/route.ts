@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/require-auth";
 
 type WorkflowConfig = {
   channel:        string;
@@ -25,6 +26,9 @@ async function recentlyMessaged(workflowId: number, memberIds: number[], cooldow
 }
 
 export async function POST(req: Request) {
+  const { error } = await requireAuth("marketing");
+  if (error) return error;
+
   const { workflowId } = await req.json();
 
   const workflow = await prisma.workflow.findUnique({ where: { id: Number(workflowId) } });

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/require-auth";
 
 // Returns classes that started within the last 30 min and haven't ended yet
 export async function GET() {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   const now     = new Date();
   const window  = new Date(now.getTime() - 30 * 60 * 1000);
 

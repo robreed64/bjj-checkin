@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function GET(req: Request) {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const memberId   = searchParams.get("memberId");
   const channel    = searchParams.get("channel");
@@ -24,6 +28,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   const { memberId, channel, subject, body, workflowId } = await req.json();
 
   const message = await prisma.message.create({

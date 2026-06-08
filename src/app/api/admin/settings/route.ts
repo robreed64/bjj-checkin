@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getGymSettings } from "@/lib/gym-settings";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { error } = await requireAuth();
+  if (error) return error;
 
   const settings = await getGymSettings();
   return NextResponse.json(settings);
 }
 
 export async function PATCH(req: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { error } = await requireAuth("settings");
+  if (error) return error;
 
   const body = await req.json();
 

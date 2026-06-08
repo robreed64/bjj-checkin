@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function GET() {
   const reqs = await prisma.beltRequirement.findMany({
@@ -9,6 +10,9 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
+  const { error } = await requireAuth("belts");
+  if (error) return error;
+
   const body: { id?: number; beltRank: string; minClasses: number; minMonths: number; minTechniques: number }[] =
     await req.json();
 

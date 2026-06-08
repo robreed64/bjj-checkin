@@ -1,8 +1,12 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { getGymSettings } from "@/lib/gym-settings";
 import WizardShell, { type WizardValues } from "./WizardShell";
 
 export default async function SetupPage() {
-  const s = await getGymSettings();
+  const [session, s] = await Promise.all([auth(), getGymSettings()]);
+  const role = (session?.user as { role?: string })?.role;
+  if (role !== "admin") redirect("/admin");
 
   const initialValues: WizardValues = {
     gymName:        s.gymName,

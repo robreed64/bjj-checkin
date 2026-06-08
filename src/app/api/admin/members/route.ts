@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function POST(req: NextRequest) {
+  const { error } = await requireAuth("members");
+  if (error) return error;
   const { name, email, phone, dateOfBirth, ageGroup, beltRank, trainingType, status, planId } = await req.json();
 
   if (!name?.trim() || !email?.trim() || !phone?.trim()) {

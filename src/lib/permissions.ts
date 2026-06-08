@@ -1,0 +1,37 @@
+export type Feature =
+  | "settings" | "setup" | "users"
+  | "members" | "plans" | "schedule"
+  | "belts" | "curriculum" | "families"
+  | "pos" | "marketing" | "reports" | "kiosk";
+
+const ROLE_FEATURES: Record<string, Feature[]> = {
+  admin:      ["settings", "setup", "users", "members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk"],
+  manager:    ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk"],
+  staff:      ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk"],
+  front_desk: ["members", "pos", "schedule", "kiosk"],
+};
+
+export function can(role: string | undefined, feature: Feature): boolean {
+  if (!role) return false;
+  return (ROLE_FEATURES[role] ?? []).includes(feature);
+}
+
+export type NavItem = { href: string; label: string; icon: string };
+
+const ALL_NAV: Array<NavItem & { feature: Feature }> = [
+  { href: "/admin/members",    label: "Members",    icon: "👥", feature: "members" },
+  { href: "/admin/plans",      label: "Plans",      icon: "💳", feature: "plans" },
+  { href: "/admin/schedule",   label: "Schedule",   icon: "📅", feature: "schedule" },
+  { href: "/admin/belts",      label: "Belts",      icon: "🥋", feature: "belts" },
+  { href: "/admin/curriculum", label: "Curriculum", icon: "📖", feature: "curriculum" },
+  { href: "/admin/families",   label: "Families",   icon: "👨‍👩‍👧", feature: "families" },
+  { href: "/admin/pos",        label: "POS",        icon: "🛒", feature: "pos" },
+  { href: "/admin/marketing",  label: "Marketing",  icon: "📣", feature: "marketing" },
+  { href: "/admin/reports",    label: "Reports",    icon: "📊", feature: "reports" },
+  { href: "/admin/users",      label: "Users",      icon: "👤", feature: "users" },
+  { href: "/kiosk",            label: "Kiosk",      icon: "📲", feature: "kiosk" },
+];
+
+export function navForRole(role: string | undefined): NavItem[] {
+  return ALL_NAV.filter((item) => can(role, item.feature));
+}

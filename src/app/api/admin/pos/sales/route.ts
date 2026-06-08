@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function GET(req: Request) {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const page  = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
   const limit = 50;
@@ -23,6 +27,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   const {
     memberId,
     paymentMethodType,

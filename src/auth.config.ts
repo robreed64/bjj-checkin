@@ -9,14 +9,31 @@ export const authConfig = {
       const role       = (auth?.user as { role?: string })?.role ?? "";
       const path       = nextUrl.pathname;
 
-      if (path.startsWith("/admin")) {
+      if (path.startsWith("/admin") || path.startsWith("/kiosk")) {
         if (!isLoggedIn) {
           const url = new URL("/login", nextUrl.origin);
           url.searchParams.set("callbackUrl", path);
           return Response.redirect(url);
         }
-        if (role === "parent") return Response.redirect(new URL("/portal",  nextUrl.origin));
-        if (role === "member") return Response.redirect(new URL("/member",  nextUrl.origin));
+        if (role === "parent") return Response.redirect(new URL("/portal", nextUrl.origin));
+        if (role === "member") return Response.redirect(new URL("/member", nextUrl.origin));
+
+        // front_desk can only access members, pos, schedule, kiosk
+        if (role === "front_desk") {
+          const allowed = ["/admin/members", "/admin/pos", "/admin/schedule", "/kiosk"];
+          if (!allowed.some((p) => path.startsWith(p))) {
+            return Response.redirect(new URL("/admin/members", nextUrl.origin));
+          }
+        }
+
+        // manager/staff cannot access settings, setup, or user management
+        if (role === "manager" || role === "staff") {
+          const blocked = ["/admin/settings", "/admin/setup", "/admin/users"];
+          if (blocked.some((p) => path.startsWith(p))) {
+            return Response.redirect(new URL("/admin/members", nextUrl.origin));
+          }
+        }
+
         return true;
       }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
+import { requireAuth } from "@/lib/require-auth";
 
 type Params = Promise<{ id: string }>;
 
@@ -12,6 +13,9 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
+  const { error } = await requireAuth("plans");
+  if (error) return error;
+
   const { id } = await params;
   const planId = parseInt(id, 10);
   const body = await req.json();
@@ -45,6 +49,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Params }) {
+  const { error } = await requireAuth("plans");
+  if (error) return error;
+
   const { id } = await params;
   const planId = parseInt(id, 10);
 

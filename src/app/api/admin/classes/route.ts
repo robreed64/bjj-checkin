@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function GET(req: NextRequest) {
   const sp        = req.nextUrl.searchParams;
@@ -20,6 +21,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const { error } = await requireAuth("schedule");
+  if (error) return error;
+
   const { programId, name, startTime, endTime, instructorName, capacity, recurrenceRule } = await req.json();
 
   if (!name || !startTime || !endTime) {
