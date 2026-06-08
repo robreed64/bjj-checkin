@@ -282,8 +282,11 @@ model GymSettings {
   locale         String   @default("en-US")
   timezone       String   @default("America/New_York")
   defaultTaxRate Float    @default(0) @map("default_tax_rate")
-  setupComplete  Boolean  @default(false) @map("setup_complete")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  setupComplete        Boolean  @default(false) @map("setup_complete")
+  stripePublishableKey String?  @map("stripe_publishable_key")
+  stripeSecretKey      String?  @map("stripe_secret_key")
+  stripeWebhookSecret  String?  @map("stripe_webhook_secret")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("gym_settings")
 }

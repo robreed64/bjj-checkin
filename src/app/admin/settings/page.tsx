@@ -15,7 +15,23 @@ type GymSettings = {
   locale: string;
   timezone: string;
   defaultTaxRate: number;
+  stripePublishableKey: string | null;
+  stripeSecretKey: string | null;
+  stripeWebhookSecret: string | null;
 };
+
+function maskKey(key: string | null | undefined): string {
+  if (!key) return "";
+  if (key.length <= 8) return "****";
+  return key.slice(0, 7) + "****" + key.slice(-4);
+}
+
+function stripeMode(key: string | null | undefined): "live" | "test" | null {
+  if (!key) return null;
+  if (key.includes("_live_")) return "live";
+  if (key.includes("_test_")) return "test";
+  return null;
+}
 
 const CURRENCIES = [
   { value: "usd", symbol: "$",   locale: "en-US", label: "USD — US Dollar ($)" },
@@ -61,6 +77,12 @@ export default function SettingsPage() {
   const router = useRouter();
   const [settings, setSettings] = useState<GymSettings | null>(null);
 
+  // Stripe state (new values typed by user — separate from what's stored)
+  const [stripePk,      setStripePk]      = useState("");
+  const [stripeSk,      setStripeSk]      = useState("");
+  const [stripeWh,      setStripeWh]      = useState("");
+  const [stripeStatus,  setStripeStatus]  = useState<"idle" | "loading" | "ok" | "error">("idle");
+
   // Password change state
   const [pwCurrent, setPwCurrent]  = useState("");
   const [pwNext,    setPwNext]     = useState("");
@@ -102,6 +124,20 @@ export default function SettingsPage() {
     setStatus(ok ? "ok" : "error");
     if (ok) router.refresh();
     setTimeout(() => setStatus("idle"), 2500);
+  };
+
+  const handleStripe = async (e: FormEvent) => {
+    e.preventDefault();
+    setStripeStatus("loading");
+    const payload: Record<string, string> = {};
+    if (stripePk.trim()) payload.stripePublishableKey = stripePk.trim();
+    if (stripeSk.trim()) payload.stripeSecretKey      = stripeSk.trim();
+    if (stripeWh.trim()) payload.stripeWebhookSecret  = stripeWh.trim();
+    if (!Object.keys(payload).length) { setStripeStatus("idle"); return; }
+    const ok = await patch(payload as Partial<GymSettings>);
+    if (ok) { setStripePk(""); setStripeSk(""); setStripeWh(""); router.refresh(); }
+    setStripeStatus(ok ? "ok" : "error");
+    setTimeout(() => setStripeStatus("idle"), 2500);
   };
 
   const handlePassword = async (e: FormEvent) => {
@@ -201,6 +237,71 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-500 mt-1">Applied to new POS items by default. Override per item as needed.</p>
           </div>
           <SaveButton loading={taxStatus === "loading"} status={taxStatus} />
+        </form>
+      </Section>
+
+      {/* Stripe */}
+      <Section title="Stripe Payments">
+        <form onSubmit={handleStripe} className="space-y-4">
+          <p className="text-xs text-gray-500">
+            Enter only the keys you want to update. Saved secrets are masked for security.
+            {settings.stripeSecretKey && (
+              <span className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold ${stripeMode(settings.stripeSecretKey) === "live" ? "bg-green-900/50 text-green-400" : "bg-yellow-900/50 text-yellow-400"}`}>
+                {stripeMode(settings.stripeSecretKey) === "live" ? "Live mode" : "Test mode"}
+              </span>
+            )}
+          </p>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Publishable Key
+              {settings.stripePublishableKey && <span className="ml-2 font-mono text-gray-600 text-xs">(current: {maskKey(settings.stripePublishableKey)})</span>}
+            </label>
+            <input
+              type="text"
+              value={stripePk}
+              onChange={e => setStripePk(e.target.value)}
+              className={input}
+              placeholder={settings.stripePublishableKey ? "Enter new key to replace…" : "pk_live_…"}
+              autoComplete="off"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Secret Key
+              {settings.stripeSecretKey && <span className="ml-2 font-mono text-gray-600 text-xs">(current: {maskKey(settings.stripeSecretKey)})</span>}
+            </label>
+            <input
+              type="password"
+              value={stripeSk}
+              onChange={e => setStripeSk(e.target.value)}
+              className={input}
+              placeholder={settings.stripeSecretKey ? "Enter new key to replace…" : "sk_live_…"}
+              autoComplete="new-password"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Webhook Signing Secret
+              {settings.stripeWebhookSecret && <span className="ml-2 font-mono text-gray-600 text-xs">(current: {maskKey(settings.stripeWebhookSecret)})</span>}
+            </label>
+            <input
+              type="password"
+              value={stripeWh}
+              onChange={e => setStripeWh(e.target.value)}
+              className={input}
+              placeholder={settings.stripeWebhookSecret ? "Enter new secret to replace…" : "whsec_…"}
+              autoComplete="new-password"
+            />
+            <p className="text-xs text-gray-600 mt-1">
+              Find this in your Stripe Dashboard → Developers → Webhooks. Point your webhook to{" "}
+              <code className="bg-gray-800 px-1 rounded">/api/stripe/webhook</code>.
+            </p>
+          </div>
+
+          <SaveButton loading={stripeStatus === "loading"} status={stripeStatus} />
         </form>
       </Section>
 

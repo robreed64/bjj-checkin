@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { stripeConfigured } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 
 export default async function PlansPage() {
-  const plans = await prisma.membershipPlan.findMany({ orderBy: { priceCents: "asc" } });
+  const [plans, stripeClient] = await Promise.all([
+    prisma.membershipPlan.findMany({ orderBy: { priceCents: "asc" } }),
+    getStripeClient(),
+  ]);
+  const stripeConfigured = !!stripeClient;
 
   return (
     <div className="p-8 max-w-4xl">

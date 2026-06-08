@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { stripe, stripeConfigured } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 
 type Params = Promise<{ id: string }>;
 
@@ -44,10 +44,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: Params }) 
   if (!member) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Cancel Stripe subscriptions before deleting
-  if (stripeConfigured && stripe && member.stripeCustomerId) {
+  const stripe = await getStripeClient();
+  if (stripe && member.stripeCustomerId) {
     try {
       const subs = await stripe.subscriptions.list({ customer: member.stripeCustomerId, status: "active" });
-      await Promise.all(subs.data.map((s) => stripe!.subscriptions.cancel(s.id)));
+      await Promise.all(subs.data.map((s) => stripe.subscriptions.cancel(s.id)));
     } catch { /* non-fatal */ }
   }
 

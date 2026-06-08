@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { stripe, stripeConfigured } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 
 export async function GET() {
   const plans = await prisma.membershipPlan.findMany({ orderBy: { priceCents: "asc" } });
@@ -15,8 +15,9 @@ export async function POST(req: NextRequest) {
   }
 
   let stripePriceId: string | null = null;
+  const stripe = await getStripeClient();
 
-  if (stripeConfigured && stripe) {
+  if (stripe) {
     // Create Stripe Product + Price
     const product = await stripe.products.create({ name, description: description ?? undefined });
     const price = await stripe.prices.create({

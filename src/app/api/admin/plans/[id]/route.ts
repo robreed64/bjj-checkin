@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { stripe, stripeConfigured } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 
 type Params = Promise<{ id: string }>;
 
@@ -19,8 +19,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const existing = await prisma.membershipPlan.findUnique({ where: { id: planId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Sync name/description to Stripe product if linked
-  if (stripeConfigured && stripe && existing.stripePriceId) {
+  const stripe = await getStripeClient();
+  if (stripe && existing.stripePriceId) {
     try {
       const price   = await stripe.prices.retrieve(existing.stripePriceId);
       const product = typeof price.product === "string" ? price.product : price.product.id;
@@ -34,10 +34,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const plan = await prisma.membershipPlan.update({
     where: { id: planId },
     data: {
-      name:            body.name        ?? existing.name,
-      description:     body.description ?? existing.description,
-      planType:        body.planType    ?? existing.planType,
-      classLimit:      body.classLimit  ?? existing.classLimit,
+      name:        body.name        ?? existing.name,
+      description: body.description ?? existing.description,
+      planType:    body.planType    ?? existing.planType,
+      classLimit:  body.classLimit  ?? existing.classLimit,
     },
   });
 
@@ -51,8 +51,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Params }) 
   const existing = await prisma.membershipPlan.findUnique({ where: { id: planId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Archive in Stripe rather than delete
-  if (stripeConfigured && stripe && existing.stripePriceId) {
+  const stripe = await getStripeClient();
+  if (stripe && existing.stripePriceId) {
     try {
       await stripe.prices.update(existing.stripePriceId, { active: false });
     } catch { /* non-fatal */ }

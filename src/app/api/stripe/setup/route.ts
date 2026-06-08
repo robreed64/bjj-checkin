@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe, stripeConfigured } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
-  if (!stripeConfigured || !stripe) {
-    return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
-  }
+  const stripe = await getStripeClient();
+  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
 
   const { name, email, memberId } = await req.json();
 
   let stripeCustomerId: string | null = null;
 
-  // Re-use existing customer if member already has one
   if (memberId) {
     const member = await prisma.member.findUnique({ where: { id: memberId } });
     stripeCustomerId = member?.stripeCustomerId ?? null;

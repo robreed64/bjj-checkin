@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { stripe, stripeConfigured } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -17,8 +17,9 @@ export async function POST(req: NextRequest) {
   let stripeSubId: string | null = null;
   let memberStatus = planId ? "active" : "trial";
 
-  // Create or attach Stripe subscription if plan has a price ID
-  if (planId && stripeConfigured && stripe) {
+  const stripe = await getStripeClient();
+
+  if (planId && stripe) {
     const plan = await prisma.membershipPlan.findUnique({ where: { id: parseInt(planId, 10) } });
 
     if (plan?.stripePriceId) {
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Update Stripe customer with the new member's DB id in metadata
-  if (resolvedCustomerId && stripeConfigured && stripe) {
+  if (resolvedCustomerId && stripe) {
     await stripe.customers.update(resolvedCustomerId, { metadata: { memberId: String(member.id) } }).catch(() => {});
   }
 

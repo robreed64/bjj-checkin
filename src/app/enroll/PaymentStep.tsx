@@ -1,13 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { loadStripe } from "@stripe/stripe-js";
+import { loadStripe, type Stripe as StripeType } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-
-const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY &&
-  !process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.startsWith("pk_test_...")
-  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
-  : null;
 
 type Props = {
   name: string;
@@ -17,34 +12,42 @@ type Props = {
 };
 
 export default function PaymentStep(props: Props) {
+  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [clientSecret, setClientSecret]   = useState<string | null>(null);
   const [customerId, setCustomerId]       = useState<string | null>(null);
   const [loading, setLoading]             = useState(true);
-  const [stripeAvailable, setStripeAvailable] = useState(false);
 
   useEffect(() => {
-    if (!stripePromise) { setLoading(false); return; }
-    setStripeAvailable(true);
+    fetch("/api/settings/public")
+      .then(r => r.json())
+      .then(({ stripePublishableKey }) => {
+        const key = stripePublishableKey || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+        if (!key || key === "pk_test_...") { setLoading(false); return; }
+        setStripePromise(loadStripe(key));
 
-    fetch("/api/stripe/setup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: props.name, email: props.email }),
-    })
-      .then((r) => r.json())
-      .then(({ clientSecret, customerId }) => {
-        setClientSecret(clientSecret);
-        setCustomerId(customerId);
+        return fetch("/api/stripe/setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: props.name, email: props.email }),
+        }).then(r => r.json());
       })
+      .then((data) => {
+        if (data?.clientSecret) {
+          setClientSecret(data.clientSecret);
+          setCustomerId(data.customerId);
+        }
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.name, props.email]);
 
-  if (!stripeAvailable) {
+  if (!stripePromise) {
     return (
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5 text-sm text-yellow-300 space-y-2">
         <p className="font-semibold">Stripe not configured</p>
         <p className="text-yellow-400/80">
-          Add your Stripe keys to <code className="bg-yellow-900/40 px-1 rounded">.env.local</code> to enable card collection. The member will be enrolled and payment can be collected separately.
+          Add your Stripe keys in <strong>Settings → Stripe</strong> to enable card collection. The member will be enrolled and payment can be collected separately.
         </p>
         <button onClick={props.onSkip} className="mt-3 px-4 py-2 rounded-lg bg-yellow-600/30 hover:bg-yellow-600/50 text-yellow-200 font-medium transition">
           Continue without payment →
@@ -63,9 +66,7 @@ export default function PaymentStep(props: Props) {
   }
 
   if (!clientSecret || !customerId) {
-    return (
-      <p className="text-red-400 text-sm">Failed to initialize payment. Please try again or skip.</p>
-    );
+    return <p className="text-red-400 text-sm">Failed to initialize payment. Please try again or skip.</p>;
   }
 
   return (
@@ -122,11 +123,7 @@ function PaymentForm({
   return (
     <div className="space-y-5">
       <PaymentElement options={{ layout: "tabs" }} />
-
-      {error && (
-        <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">{error}</p>
-      )}
-
+      {error && <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">{error}</p>}
       <div className="flex justify-between items-center pt-1">
         <button onClick={onSkip} className="text-sm text-gray-500 hover:text-gray-300 transition">
           Skip — collect payment later
