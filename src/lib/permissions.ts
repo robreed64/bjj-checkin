@@ -2,12 +2,12 @@ export type Feature =
   | "settings" | "setup" | "users"
   | "members" | "plans" | "schedule"
   | "belts" | "curriculum" | "families"
-  | "pos" | "marketing" | "reports" | "kiosk";
+  | "pos" | "marketing" | "reports" | "kiosk" | "leads";
 
 const ROLE_FEATURES: Record<string, Feature[]> = {
-  admin:      ["settings", "setup", "users", "members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk"],
-  manager:    ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk"],
-  staff:      ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk"],
+  admin:      ["settings", "setup", "users", "members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk", "leads"],
+  manager:    ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk", "leads"],
+  staff:      ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk", "leads"],
   front_desk: ["members", "pos", "schedule", "kiosk"],
 };
 
@@ -20,6 +20,7 @@ export type NavItem = { href: string; label: string; icon: string };
 
 const ALL_NAV: Array<NavItem & { feature: Feature }> = [
   { href: "/admin/members",    label: "Members",    icon: "👥", feature: "members" },
+  { href: "/admin/leads",      label: "Leads",      icon: "🎯", feature: "leads" },
   { href: "/admin/plans",      label: "Plans",      icon: "💳", feature: "plans" },
   { href: "/admin/schedule",   label: "Schedule",   icon: "📅", feature: "schedule" },
   { href: "/admin/belts",      label: "Belts",      icon: "🥋", feature: "belts" },

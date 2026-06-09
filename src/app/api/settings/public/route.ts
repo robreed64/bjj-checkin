@@ -5,6 +5,7 @@ export async function GET() {
   const settings = await getGymSettings();
   return NextResponse.json({
     gymName: settings.gymName,
+    logoUrl: settings.logoUrl || null,
     stripePublishableKey: settings.stripePublishableKey || null,
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 type GymSettings = {
@@ -80,6 +80,10 @@ function SaveButton({ loading, status }: { loading: boolean; status: "idle" | "l
 export default function SettingsPage() {
   const router = useRouter();
   const [settings, setSettings] = useState<GymSettings | null>(null);
+  const [origin, setOrigin] = useState("");
+  const embedRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { setOrigin(window.location.origin); }, []);
 
   // Stripe state (new values typed by user — separate from what's stored)
   const [stripePk,      setStripePk]      = useState("");
@@ -395,6 +399,50 @@ export default function SettingsPage() {
 
           <SaveButton loading={brevoStatus === "loading"} status={brevoStatus} />
         </form>
+      </Section>
+
+      {/* Lead Capture */}
+      <Section title="Lead Capture Widget">
+        <div id="lead-capture" className="space-y-4">
+          <p className="text-xs text-gray-500">
+            Embed this form on your gym&apos;s website. Submissions create a new lead in{" "}
+            <a href="/admin/leads" className="underline text-blue-400 hover:text-blue-300">Leads</a>{" "}
+            and send you an email notification (if Brevo is configured).
+          </p>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Embed Code</label>
+            <textarea
+              ref={embedRef}
+              readOnly
+              rows={4}
+              value={origin ? `<iframe\n  src="${origin}/widget/lead"\n  width="100%"\n  height="520"\n  frameborder="0"\n  style="border-radius:12px;border:1px solid #e5e7eb;"\n></iframe>` : "Loading…"}
+              className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 text-xs font-mono resize-none focus:outline-none focus:border-blue-500"
+              onClick={() => embedRef.current?.select()}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                embedRef.current?.select();
+                document.execCommand("copy");
+              }}
+              className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition"
+            >
+              Copy code
+            </button>
+            {origin && (
+              <a
+                href={`${origin}/widget/lead`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-blue-400 hover:text-blue-300 transition"
+              >
+                Preview form →
+              </a>
+            )}
+          </div>
+        </div>
       </Section>
 
       {/* Change Password */}
