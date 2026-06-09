@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import QRCode from "react-qr-code";
+import PhotoUploader from "@/components/PhotoUploader";
 
 // ── Contact Info ─────────────────────────────────────────────────────────────
 
@@ -287,6 +288,40 @@ function CardForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: ()
   );
 }
 
+// ── Photo ─────────────────────────────────────────────────────────────────────
+
+function PhotoSection() {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [name, setName]         = useState("");
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    fetch("/api/member/profile")
+      .then(r => r.json())
+      .then(d => { setPhotoUrl(d.photoUrl ?? null); setName(d.name ?? ""); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return null;
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-2">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Profile Photo</h2>
+      <div className="flex items-center gap-5 pt-1">
+        <PhotoUploader
+          currentUrl={photoUrl}
+          uploadUrl="/api/member/photo"
+          name={name}
+          onUpload={setPhotoUrl}
+        />
+        <p className="text-sm text-gray-400">
+          Your photo helps staff and teammates recognize you. Click the circle to upload or change it.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── QR Check-in Card ─────────────────────────────────────────────────────────
 
 function QRSection() {
@@ -362,6 +397,7 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-white">My Profile</h1>
+      <PhotoSection />
       <ContactSection />
       <PasswordSection />
       <CardSection />

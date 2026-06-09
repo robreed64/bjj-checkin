@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import PhotoUploader from "@/components/PhotoUploader";
 
 const BELT_RANKS   = ["white", "blue", "purple", "brown", "black"];
 const AGE_GROUPS   = ["adult", "kids"];
@@ -106,34 +107,38 @@ export default function EditMemberPage() {
           {/* Basic info */}
           <Section title="Basic Info">
             <div className="grid grid-cols-1 gap-4">
-              <Field label="Full Name *">
-                <input value={form.name} onChange={(e) => set("name", e.target.value)}
-                  className={inp} placeholder="Jane Smith" />
-              </Field>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Email">
-                  <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)}
-                    className={inp} placeholder="jane@email.com" />
-                </Field>
-                <Field label="Phone">
-                  <input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)}
-                    className={inp} placeholder="(555) 555-5555" />
-                </Field>
+              <div className="flex items-start gap-6">
+                <PhotoUploader
+                  currentUrl={form.photoUrl || null}
+                  uploadUrl={`/api/admin/members/${id}/photo`}
+                  name={form.name}
+                  onUpload={(url) => set("photoUrl", url)}
+                />
+                <div className="flex-1 space-y-4">
+                  <Field label="Full Name *">
+                    <input value={form.name} onChange={(e) => set("name", e.target.value)}
+                      className={inp} placeholder="Jane Smith" />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Email">
+                      <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)}
+                        className={inp} placeholder="jane@email.com" />
+                    </Field>
+                    <Field label="Phone">
+                      <input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)}
+                        className={inp} placeholder="(555) 555-5555" />
+                    </Field>
+                  </div>
+                </div>
               </div>
               <Field label="Address">
                 <input value={form.address} onChange={(e) => set("address", e.target.value)}
                   className={inp} placeholder="123 Main St, City, ST 00000" />
               </Field>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Date of Birth">
-                  <input type="date" value={form.dateOfBirth} onChange={(e) => set("dateOfBirth", e.target.value)}
-                    className={inp} />
-                </Field>
-                <Field label="Photo URL">
-                  <input type="url" value={form.photoUrl} onChange={(e) => set("photoUrl", e.target.value)}
-                    className={inp} placeholder="https://…" />
-                </Field>
-              </div>
+              <Field label="Date of Birth">
+                <input type="date" value={form.dateOfBirth} onChange={(e) => set("dateOfBirth", e.target.value)}
+                  className="w-48 px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-blue-500 text-sm transition" />
+              </Field>
             </div>
           </Section>
 

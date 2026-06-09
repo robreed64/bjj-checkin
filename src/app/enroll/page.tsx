@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -129,7 +129,7 @@ export default function EnrollPage() {
   if (step === 4) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-        <div className="text-center space-y-5 max-w-sm">
+        <div className="text-center space-y-5 max-w-sm w-full">
           <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
             <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -137,6 +137,12 @@ export default function EnrollPage() {
           </div>
           <h1 className="text-3xl font-bold text-white">Welcome, {form.name.split(" ")[0]}!</h1>
           <p className="text-gray-400">Your enrollment is complete. You&apos;re ready to train.</p>
+
+          {/* Optional photo capture */}
+          {newMemberId && (
+            <EnrollPhotoCapture memberId={newMemberId} memberName={form.name} />
+          )}
+
           <div className="flex flex-col gap-3 pt-2">
             <button
               onClick={() => router.push("/kiosk")}
@@ -381,6 +387,65 @@ export default function EnrollPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Enrollment photo capture (shown on success screen) ───────────────────────
+
+function EnrollPhotoCapture({ memberId, memberName }: { memberId: number; memberName: string }) {
+  const [preview, setPreview]     = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [done, setDone]           = useState(false);
+  const inputRef                  = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    if (file.size > 4 * 1024 * 1024) return;
+    setPreview(URL.createObjectURL(file));
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/admin/members/${memberId}/photo`, { method: "POST", body: fd });
+    if (res.ok) setDone(true);
+    setUploading(false);
+  }
+
+  if (done) {
+    return (
+      <div className="flex items-center justify-center gap-2 text-green-400 text-sm">
+        {preview && <img src={preview} alt="photo" className="w-10 h-10 rounded-full object-cover" />}
+        <span>Photo saved ✓</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+      <p className="text-sm text-gray-400 mb-3">Add a photo so staff can recognize you at the front desk.</p>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+      {preview ? (
+        <div className="flex items-center gap-3">
+          <img src={preview} alt="preview" className="w-14 h-14 rounded-full object-cover border-2 border-gray-600" />
+          <span className="text-sm text-gray-400">{uploading ? "Uploading…" : "Ready"}</span>
+        </div>
+      ) : (
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium transition"
+        >
+          📷 Take or upload photo
+        </button>
+      )}
     </div>
   );
 }

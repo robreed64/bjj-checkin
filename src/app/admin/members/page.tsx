@@ -50,7 +50,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
       select: {
         id: true, name: true, email: true, beltRank: true,
         status: true, trainingType: true, ageGroup: true,
-        createdAt: true,
+        photoUrl: true, createdAt: true,
         _count: { select: { attendance: true } },
       },
     }),
@@ -110,9 +110,17 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
               return (
                 <tr key={m.id} className="hover:bg-gray-900/40 transition">
                   <td className="px-4 py-3">
-                    <Link href={`/admin/members/${m.id}`} className="hover:text-blue-400 transition">
-                      <div className="font-medium text-white">{m.name}</div>
-                      {m.email && <div className="text-gray-500 text-xs">{m.email}</div>}
+                    <Link href={`/admin/members/${m.id}`} className="hover:text-blue-400 transition flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-700 border border-gray-600 flex-shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold text-gray-400">
+                        {m.photoUrl
+                          ? <img src={m.photoUrl} alt={m.name} className="w-full h-full object-cover" />
+                          : m.name.trim().split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase()
+                        }
+                      </div>
+                      <div>
+                        <div className="font-medium text-white">{m.name}</div>
+                        {m.email && <div className="text-gray-500 text-xs">{m.email}</div>}
+                      </div>
                     </Link>
                   </td>
                   <td className="px-4 py-3">
