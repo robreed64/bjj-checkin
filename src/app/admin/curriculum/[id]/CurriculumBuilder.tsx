@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import VideoPlayer from "@/components/VideoPlayer";
 
 type Technique = { name: string; description?: string; videoUrl?: string };
 
@@ -236,8 +237,10 @@ export default function CurriculumBuilder({
                       </div>
                       <input value={t.description ?? ""} onChange={(e) => updateTechnique(i, "description", e.target.value)}
                         className={inp} placeholder="Description / coaching notes (optional)" />
-                      <input value={t.videoUrl ?? ""} onChange={(e) => updateTechnique(i, "videoUrl", e.target.value)}
-                        className={inp} placeholder="Video URL (optional)" />
+                      <VideoInput
+                        value={t.videoUrl ?? ""}
+                        onChange={(v) => updateTechnique(i, "videoUrl", v)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -305,15 +308,10 @@ function LessonCard({ lesson, onEdit, onDelete }: { lesson: Lesson; onEdit: () =
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Techniques</p>
               <div className="space-y-2">
                 {techs.map((t, i) => (
-                  <div key={i} className="bg-gray-800 rounded-lg px-3 py-2.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium text-white">{t.name}</p>
-                      {t.videoUrl && (
-                        <a href={t.videoUrl} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-blue-400 hover:text-blue-300 transition flex-shrink-0">▶ Video</a>
-                      )}
-                    </div>
-                    {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
+                  <div key={i} className="bg-gray-800 rounded-lg px-3 py-2.5 space-y-2">
+                    <p className="text-sm font-medium text-white">{t.name}</p>
+                    {t.description && <p className="text-xs text-gray-400">{t.description}</p>}
+                    {t.videoUrl && <VideoPlayer url={t.videoUrl} />}
                   </div>
                 ))}
               </div>
@@ -327,6 +325,64 @@ function LessonCard({ lesson, onEdit, onDelete }: { lesson: Lesson; onEdit: () =
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function VideoInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [mode, setMode] = useState<"upload" | "url">(value ? "url" : "upload");
+  const [err, setErr] = useState<string | null>(null);
+
+  async function handleFile(file: File) {
+    if (file.size > 200 * 1024 * 1024) { setErr("Max 200 MB"); return; }
+    setUploading(true); setErr(null);
+    const fd = new FormData(); fd.append("file", file);
+    const res = await fetch("/api/admin/media/video", { method: "POST", body: fd });
+    const data = await res.json();
+    if (res.ok) onChange(data.videoUrl);
+    else setErr(data.error ?? "Upload failed");
+    setUploading(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setMode("upload")}
+          className={`text-xs px-2.5 py-1 rounded-full transition ${mode === "upload" ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-400 hover:text-white"}`}>
+          Upload
+        </button>
+        <button type="button" onClick={() => setMode("url")}
+          className={`text-xs px-2.5 py-1 rounded-full transition ${mode === "url" ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-400 hover:text-white"}`}>
+          URL
+        </button>
+        {value && (
+          <button type="button" onClick={() => { onChange(""); setErr(null); }}
+            className="ml-auto text-xs text-red-400 hover:text-red-300 transition">Clear</button>
+        )}
+      </div>
+
+      {mode === "upload" ? (
+        <div>
+          <input ref={fileRef} type="file" accept="video/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+          <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()}
+            className="w-full py-2 rounded-lg border border-dashed border-gray-600 hover:border-blue-500 text-xs text-gray-400 hover:text-white transition disabled:opacity-50">
+            {uploading ? "Uploading…" : value ? "Replace video" : "Click to upload video (MP4, WebM, MOV — max 200 MB)"}
+          </button>
+        </div>
+      ) : (
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className={inp}
+          placeholder="YouTube, Vimeo, or direct video URL"
+        />
+      )}
+
+      {err && <p className="text-xs text-red-400">{err}</p>}
+      {value && <VideoPlayer url={value} />}
     </div>
   );
 }

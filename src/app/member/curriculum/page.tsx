@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { BELT_STYLES } from "@/lib/belt-data";
+import VideoPlayer from "@/components/VideoPlayer";
 
 type Technique = { name: string; description?: string; videoUrl?: string };
 
@@ -122,15 +123,10 @@ function WeekView({
                       <div className="space-y-2">
                         <p className="text-xs text-gray-500 uppercase tracking-wider">Techniques</p>
                         {techs.map((t, i) => (
-                          <div key={i} className="bg-gray-900/60 rounded-lg px-3 py-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm font-medium text-gray-100">{t.name}</p>
-                              {t.videoUrl && (
-                                <a href={t.videoUrl} target="_blank" rel="noopener noreferrer"
-                                  className="text-xs text-blue-400 hover:text-blue-300 transition flex-shrink-0">▶ Watch</a>
-                              )}
-                            </div>
-                            {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
+                          <div key={i} className="bg-gray-900/60 rounded-lg px-3 py-2 space-y-2">
+                            <p className="text-sm font-medium text-gray-100">{t.name}</p>
+                            {t.description && <p className="text-xs text-gray-400">{t.description}</p>}
+                            {t.videoUrl && <VideoPlayer url={t.videoUrl} />}
                           </div>
                         ))}
                       </div>
