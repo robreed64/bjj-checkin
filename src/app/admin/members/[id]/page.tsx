@@ -9,6 +9,7 @@ import AttendanceManager from "./AttendanceManager";
 import BeltStripesEditor from "./BeltStripesEditor";
 import { getNextBelt } from "@/lib/belt-data";
 import { getGymSettings } from "@/lib/gym-settings";
+import MemberQRCode from "./MemberQRCode";
 
 const BELT_STYLES: Record<string, { bg: string; text: string }> = {
   white:  { bg: "bg-white",      text: "text-gray-900" },
@@ -165,6 +166,11 @@ export default async function MemberDetailPage({ params }: { params: Params }) {
           <div className="grid grid-cols-2 gap-4">
             <Stat label="Total check-ins" value={member._count.attendance} />
           </div>
+        </Section>
+
+        {/* QR check-in */}
+        <Section title="Check-In QR Code">
+          <MemberQRCode memberId={member.id} />
         </Section>
 
         {/* Family */}

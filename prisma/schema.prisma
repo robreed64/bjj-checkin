@@ -23,6 +23,7 @@ model Member {
   photoUrl         String?   @map("photo_url")
   status           String    @default("active") // 'active','past_due','canceled','inactive','lead','trial'
   stripeCustomerId String?   @map("stripe_customer_id")
+  checkinToken     String?   @unique @map("checkin_token")
   beltStripes      Int       @default(0) @map("belt_stripes")
   waiverSignedAt   DateTime? @map("waiver_signed_at")
   createdAt        DateTime  @default(now()) @map("created_at")

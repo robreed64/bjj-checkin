@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import KioskExitModal from "./KioskExitModal";
+
+const QRScannerView = dynamic(() => import("./QRScannerView"), { ssr: false });
 
 type MemberResult = {
   id: number;
@@ -16,6 +19,7 @@ type MemberResult = {
 };
 
 type CheckInState = "idle" | "loading" | "success" | "error";
+type Mode = "search" | "scan";
 
 const BELT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   white:  { bg: "bg-white",       text: "text-gray-900", label: "White Belt" },
@@ -61,6 +65,7 @@ type ActiveClass = { id: number; name: string; startTime: string; endTime: strin
 export default function KioskPage() {
   const [gymName, setGymName] = useState("BJJ Check-In");
   const [showExit, setShowExit] = useState(false);
+  const [mode, setMode] = useState<Mode>("search");
 
   useEffect(() => {
     fetch("/api/settings/public").then(r => r.json()).then(d => {
@@ -71,20 +76,17 @@ export default function KioskPage() {
   // Fullscreen lock
   useEffect(() => {
     try { document.documentElement.requestFullscreen().catch(() => {}); } catch {}
-
     const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
     window.addEventListener("beforeunload", onBeforeUnload);
-
-    // Push a state so back button is absorbed
     history.pushState(null, "", window.location.href);
     const onPopState = () => history.pushState(null, "", window.location.href);
     window.addEventListener("popstate", onPopState);
-
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
       window.removeEventListener("popstate", onPopState);
     };
   }, []);
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MemberResult[]>([]);
   const [selected, setSelected] = useState<MemberResult | null>(null);
@@ -92,6 +94,13 @@ export default function KioskPage() {
   const [searching, setSearching] = useState(false);
   const [activeClasses, setActiveClasses] = useState<ActiveClass[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+  // QR scan result state
+  const [scanResult, setScanResult] = useState<{
+    state: "loading" | "success" | "error";
+    name?: string;
+    beltRank?: string | null;
+  } | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -152,6 +161,28 @@ export default function KioskPage() {
     }
   };
 
+  // QR scan handler — auto check-in, no confirmation tap needed
+  const handleQRScan = useCallback(async (token: string) => {
+    setScanResult({ state: "loading" });
+    try {
+      const res = await fetch("/api/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, classId: selectedClassId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setScanResult({ state: "success", name: data.member?.name, beltRank: data.member?.beltRank });
+      } else {
+        setScanResult({ state: "error" });
+      }
+    } catch {
+      setScanResult({ state: "error" });
+    }
+    // Reset after 3 seconds and re-open scanner
+    setTimeout(() => setScanResult(null), 3000);
+  }, [selectedClassId]);
+
   const handleReset = () => {
     setSelected(null);
     setQuery("");
@@ -164,7 +195,7 @@ export default function KioskPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-gray-950 px-4 pt-12 pb-8 relative">
-      {/* Hidden admin exit button — top-right corner, visible on hover */}
+      {/* Hidden admin exit button */}
       <div className="absolute top-3 right-3 group">
         <button
           onClick={() => setShowExit(true)}
@@ -181,215 +212,244 @@ export default function KioskPage() {
       {showExit && <KioskExitModal onClose={() => setShowExit(false)} />}
 
       {/* Header */}
-      <div className="mb-10 text-center">
+      <div className="mb-8 text-center">
         <h1 className="text-4xl font-black tracking-tight text-white">{gymName}</h1>
-        <p className="mt-1 text-gray-400 text-lg">Search by name to check in</p>
-        <Link
-          href="/enroll"
-          className="mt-4 inline-block px-5 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm font-medium text-gray-300 hover:text-white transition"
-        >
-          New member? Enroll here →
-        </Link>
+
+        {/* Mode toggle */}
+        <div className="mt-5 inline-flex rounded-xl bg-gray-800 p-1 gap-1">
+          <button
+            onClick={() => { setMode("search"); setScanResult(null); }}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition ${mode === "search" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"}`}
+          >
+            Search by name
+          </button>
+          <button
+            onClick={() => { setMode("scan"); setSelected(null); setQuery(""); setResults([]); }}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition ${mode === "scan" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"}`}
+          >
+            Scan QR code
+          </button>
+        </div>
       </div>
 
-      {/* Search box */}
-      {!selected && (
-        <div className="w-full max-w-xl relative">
-          <div className="relative">
-            <svg
-              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-            </svg>
-            <input
-              ref={inputRef}
-              autoFocus
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Type your name..."
-              className="w-full pl-12 pr-4 py-5 text-xl rounded-2xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
-            />
-            {searching && (
-              <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                <div className="w-5 h-5 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin" />
+      {/* ── SEARCH MODE ── */}
+      {mode === "search" && (
+        <>
+          {!selected && (
+            <div className="w-full max-w-xl relative">
+              <div className="relative">
+                <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                </svg>
+                <input
+                  ref={inputRef}
+                  autoFocus
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Type your name..."
+                  className="w-full pl-12 pr-4 py-5 text-xl rounded-2xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+                />
+                {searching && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    <div className="w-5 h-5 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Dropdown results */}
-          {results.length > 0 && (
-            <ul className="absolute top-full mt-2 w-full bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden z-10">
-              {results.map((m) => {
-                const statusStyle = STATUS_STYLES[m.status] ?? STATUS_STYLES.inactive;
-                const beltStyle = m.beltRank ? BELT_STYLES[m.beltRank.toLowerCase()] : null;
-                return (
-                  <li key={m.id}>
-                    <button
-                      onClick={() => handleSelect(m)}
-                      className="w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-700 transition text-left"
-                    >
-                      <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-gray-600">
-                        {m.photoUrl
-                          ? <Image src={m.photoUrl} alt={m.name} width={40} height={40} className="object-cover w-full h-full" />
-                          : <Initials name={m.name} />
-                        }
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-white truncate">{m.name}</div>
-                        <div className="text-sm text-gray-400">{m.trainingType ?? "—"}</div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {beltStyle && (
-                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${beltStyle.bg} ${beltStyle.text}`}>
-                            {beltStyle.label}
-                          </span>
-                        )}
-                        <span className={`px-2 py-0.5 rounded border text-xs font-medium ${statusStyle.badge}`}>
-                          {statusStyle.label}
-                        </span>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+              {results.length > 0 && (
+                <ul className="absolute top-full mt-2 w-full bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden z-10">
+                  {results.map((m) => {
+                    const statusStyle = STATUS_STYLES[m.status] ?? STATUS_STYLES.inactive;
+                    const beltStyle = m.beltRank ? BELT_STYLES[m.beltRank.toLowerCase()] : null;
+                    return (
+                      <li key={m.id}>
+                        <button
+                          onClick={() => handleSelect(m)}
+                          className="w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-700 transition text-left"
+                        >
+                          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-gray-600">
+                            {m.photoUrl
+                              ? <Image src={m.photoUrl} alt={m.name} width={40} height={40} className="object-cover w-full h-full" />
+                              : <Initials name={m.name} />
+                            }
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-white truncate">{m.name}</div>
+                            <div className="text-sm text-gray-400">{m.trainingType ?? "—"}</div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {beltStyle && (
+                              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${beltStyle.bg} ${beltStyle.text}`}>
+                                {beltStyle.label}
+                              </span>
+                            )}
+                            <span className={`px-2 py-0.5 rounded border text-xs font-medium ${statusStyle.badge}`}>
+                              {statusStyle.label}
+                            </span>
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {query.length >= 2 && !searching && results.length === 0 && (
+                <p className="mt-4 text-center text-gray-500">No members found for &ldquo;{query}&rdquo;</p>
+              )}
+            </div>
           )}
 
-          {query.length >= 2 && !searching && results.length === 0 && (
-            <p className="mt-4 text-center text-gray-500">No members found for &ldquo;{query}&rdquo;</p>
-          )}
-        </div>
-      )}
-
-      {/* Member card */}
-      {selected && (
-        <div className="w-full max-w-sm">
-          <div
-            className={`rounded-3xl overflow-hidden shadow-2xl border transition-all duration-300 ${
-              checkInState === "success"
-                ? "border-green-500/60 shadow-green-500/20"
-                : checkInState === "error"
-                ? "border-red-500/60"
+          {selected && (
+            <div className="w-full max-w-sm">
+              <div className={`rounded-3xl overflow-hidden shadow-2xl border transition-all duration-300 ${
+                checkInState === "success" ? "border-green-500/60 shadow-green-500/20"
+                : checkInState === "error"  ? "border-red-500/60"
                 : "border-gray-700"
-            }`}
-          >
-            {/* Belt color bar */}
-            {belt && (
-              <div className={`h-2 w-full ${belt.bg}`} />
-            )}
+              }`}>
+                {belt && <div className={`h-2 w-full ${belt.bg}`} />}
+                <div className="bg-gray-900 p-8 flex flex-col items-center text-center gap-4">
+                  <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-gray-700 flex-shrink-0">
+                    {selected.photoUrl
+                      ? <Image src={selected.photoUrl} alt={selected.name} width={112} height={112} className="object-cover w-full h-full" />
+                      : <Initials name={selected.name} />
+                    }
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold text-white">{selected.name}</h2>
+                    <div className="mt-2 flex items-center justify-center gap-2 flex-wrap">
+                      <BeltBadge rank={selected.beltRank} />
+                      {selected.ageGroup && <span className="text-sm text-gray-400 capitalize">{selected.ageGroup}</span>}
+                    </div>
+                  </div>
+                  {(() => {
+                    const s = STATUS_STYLES[selected.status] ?? STATUS_STYLES.inactive;
+                    return <span className={`px-3 py-1 rounded-full border text-sm font-medium ${s.badge}`}>{s.label}</span>;
+                  })()}
 
-            <div className="bg-gray-900 p-8 flex flex-col items-center text-center gap-4">
-              {/* Avatar */}
-              <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-gray-700 flex-shrink-0">
-                {selected.photoUrl
-                  ? <Image src={selected.photoUrl} alt={selected.name} width={112} height={112} className="object-cover w-full h-full" />
-                  : <Initials name={selected.name} />
-                }
-              </div>
+                  {activeClasses.length > 0 && checkInState === "idle" && (
+                    <div className="w-full">
+                      <p className="text-xs text-gray-500 mb-2 text-center">Checking into</p>
+                      <div className="flex flex-col gap-1.5">
+                        {activeClasses.map((c) => (
+                          <button key={c.id} onClick={() => setSelectedClassId(selectedClassId === c.id ? null : c.id)}
+                            className={`w-full px-4 py-2.5 rounded-xl text-sm font-medium border transition ${
+                              selectedClassId === c.id ? "border-blue-500 bg-blue-600/20 text-blue-300" : "border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600"
+                            }`}>
+                            {c.name}{selectedClassId === c.id && " ✓"}
+                          </button>
+                        ))}
+                        <button onClick={() => setSelectedClassId(null)}
+                          className={`w-full px-4 py-2 rounded-xl text-sm border transition ${
+                            selectedClassId === null ? "border-gray-500 bg-gray-700 text-gray-300" : "border-gray-800 text-gray-600 hover:border-gray-700"
+                          }`}>
+                          Open mat / no class
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-              {/* Name */}
-              <div>
-                <h2 className="text-3xl font-bold text-white">{selected.name}</h2>
-                <div className="mt-2 flex items-center justify-center gap-2 flex-wrap">
-                  <BeltBadge rank={selected.beltRank} />
-                  {selected.ageGroup && (
-                    <span className="text-sm text-gray-400 capitalize">{selected.ageGroup}</span>
+                  {checkInState === "success" ? (
+                    <div className="mt-2 flex flex-col items-center gap-2">
+                      <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
+                        <svg className="w-9 h-9 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <p className="text-green-400 font-semibold text-lg">Checked In!</p>
+                      <p className="text-gray-500 text-sm">See you on the mats</p>
+                    </div>
+                  ) : checkInState === "error" ? (
+                    <div className="mt-2 flex flex-col items-center gap-3 w-full">
+                      <p className="text-red-400 font-medium">Check-in failed</p>
+                      <button onClick={handleCheckIn} className="w-full py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-lg transition">Try Again</button>
+                    </div>
+                  ) : (
+                    <button onClick={handleCheckIn} disabled={checkInState === "loading"}
+                      className="mt-2 w-full py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 text-white font-bold text-xl transition-colors">
+                      {checkInState === "loading"
+                        ? <span className="flex items-center justify-center gap-2"><span className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Checking in…</span>
+                        : "Check In"}
+                    </button>
                   )}
                 </div>
               </div>
-
-              {/* Status */}
-              {(() => {
-                const s = STATUS_STYLES[selected.status] ?? STATUS_STYLES.inactive;
-                return (
-                  <span className={`px-3 py-1 rounded-full border text-sm font-medium ${s.badge}`}>
-                    {s.label}
-                  </span>
-                );
-              })()}
-
-              {/* Active class selector */}
-              {activeClasses.length > 0 && checkInState === "idle" && (
-                <div className="w-full">
-                  <p className="text-xs text-gray-500 mb-2 text-center">Checking into</p>
-                  <div className="flex flex-col gap-1.5">
-                    {activeClasses.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => setSelectedClassId(selectedClassId === c.id ? null : c.id)}
-                        className={`w-full px-4 py-2.5 rounded-xl text-sm font-medium border transition ${
-                          selectedClassId === c.id
-                            ? "border-blue-500 bg-blue-600/20 text-blue-300"
-                            : "border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600"
-                        }`}
-                      >
-                        {c.name}
-                        {selectedClassId === c.id && " ✓"}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setSelectedClassId(null)}
-                      className={`w-full px-4 py-2 rounded-xl text-sm border transition ${
-                        selectedClassId === null
-                          ? "border-gray-500 bg-gray-700 text-gray-300"
-                          : "border-gray-800 text-gray-600 hover:border-gray-700"
-                      }`}
-                    >
-                      Open mat / no class
-                    </button>
-                  </div>
-                </div>
+              {checkInState !== "success" && (
+                <button onClick={handleReset} className="mt-5 w-full py-3 rounded-2xl text-gray-400 hover:text-white hover:bg-gray-800 text-sm font-medium transition">
+                  ← Back to search
+                </button>
               )}
+            </div>
+          )}
 
-              {/* Check-in button / states */}
-              {checkInState === "success" ? (
-                <div className="mt-2 flex flex-col items-center gap-2">
+          <Link href="/enroll" className="mt-8 inline-block px-5 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm font-medium text-gray-300 hover:text-white transition">
+            New member? Enroll here →
+          </Link>
+        </>
+      )}
+
+      {/* ── SCAN MODE ── */}
+      {mode === "scan" && (
+        <div className="flex flex-col items-center gap-6 w-full max-w-xs">
+          {scanResult ? (
+            <div className={`w-full rounded-3xl border p-8 flex flex-col items-center gap-4 text-center transition-all ${
+              scanResult.state === "success" ? "border-green-500/60 bg-gray-900" : "border-red-500/60 bg-gray-900"
+            }`}>
+              {scanResult.state === "loading" && (
+                <>
+                  <div className="w-12 h-12 border-4 border-gray-600 border-t-blue-500 rounded-full animate-spin" />
+                  <p className="text-gray-400">Checking in…</p>
+                </>
+              )}
+              {scanResult.state === "success" && (
+                <>
                   <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
                     <svg className="w-9 h-9 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
+                  {scanResult.name && (
+                    <>
+                      <p className="text-white text-2xl font-bold">{scanResult.name}</p>
+                      <BeltBadge rank={scanResult.beltRank ?? null} />
+                    </>
+                  )}
                   <p className="text-green-400 font-semibold text-lg">Checked In!</p>
                   <p className="text-gray-500 text-sm">See you on the mats</p>
-                </div>
-              ) : checkInState === "error" ? (
-                <div className="mt-2 flex flex-col items-center gap-3 w-full">
-                  <p className="text-red-400 font-medium">Check-in failed</p>
-                  <button
-                    onClick={handleCheckIn}
-                    className="w-full py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-lg transition"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleCheckIn}
-                  disabled={checkInState === "loading"}
-                  className="mt-2 w-full py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 text-white font-bold text-xl transition-colors"
-                >
-                  {checkInState === "loading" ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      Checking in…
-                    </span>
-                  ) : (
-                    "Check In"
-                  )}
-                </button>
+                </>
+              )}
+              {scanResult.state === "error" && (
+                <>
+                  <p className="text-red-400 font-semibold text-lg">Check-in failed</p>
+                  <p className="text-gray-500 text-sm">Invalid QR or membership canceled</p>
+                </>
               )}
             </div>
-          </div>
+          ) : (
+            <QRScannerView onScan={handleQRScan} />
+          )}
 
-          {checkInState !== "success" && (
-            <button
-              onClick={handleReset}
-              className="mt-5 w-full py-3 rounded-2xl text-gray-400 hover:text-white hover:bg-gray-800 text-sm font-medium transition"
-            >
-              ← Back to search
-            </button>
+          {activeClasses.length > 0 && !scanResult && (
+            <div className="w-full">
+              <p className="text-xs text-gray-500 mb-2 text-center">Class to check into</p>
+              <div className="flex flex-col gap-1.5">
+                {activeClasses.map((c) => (
+                  <button key={c.id} onClick={() => setSelectedClassId(selectedClassId === c.id ? null : c.id)}
+                    className={`w-full px-4 py-2.5 rounded-xl text-sm font-medium border transition ${
+                      selectedClassId === c.id ? "border-blue-500 bg-blue-600/20 text-blue-300" : "border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600"
+                    }`}>
+                    {c.name}{selectedClassId === c.id && " ✓"}
+                  </button>
+                ))}
+                <button onClick={() => setSelectedClassId(null)}
+                  className={`w-full px-4 py-2 rounded-xl text-sm border transition ${
+                    selectedClassId === null ? "border-gray-500 bg-gray-700 text-gray-300" : "border-gray-800 text-gray-600 hover:border-gray-700"
+                  }`}>
+                  Open mat / no class
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
