@@ -2,12 +2,12 @@ export type Feature =
   | "settings" | "setup" | "users"
   | "members" | "plans" | "schedule"
   | "belts" | "curriculum" | "families"
-  | "pos" | "marketing" | "reports" | "kiosk" | "leads";
+  | "pos" | "marketing" | "reports" | "kiosk" | "leads" | "notifications";
 
 const ROLE_FEATURES: Record<string, Feature[]> = {
-  admin:      ["settings", "setup", "users", "members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk", "leads"],
-  manager:    ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk", "leads"],
-  staff:      ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk", "leads"],
+  admin:      ["settings", "setup", "users", "members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk", "leads", "notifications"],
+  manager:    ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk", "leads", "notifications"],
+  staff:      ["members", "plans", "schedule", "belts", "curriculum", "families", "pos", "marketing", "reports", "kiosk", "leads", "notifications"],
   front_desk: ["members", "pos", "schedule", "kiosk"],
 };
 
@@ -27,8 +27,9 @@ const ALL_NAV: Array<NavItem & { feature: Feature }> = [
   { href: "/admin/curriculum", label: "Curriculum", icon: "📖", feature: "curriculum" },
   { href: "/admin/families",   label: "Families",   icon: "👨‍👩‍👧", feature: "families" },
   { href: "/admin/pos",        label: "POS",        icon: "🛒", feature: "pos" },
-  { href: "/admin/marketing",  label: "Marketing",  icon: "📣", feature: "marketing" },
-  { href: "/admin/reports",    label: "Reports",    icon: "📊", feature: "reports" },
+  { href: "/admin/marketing",      label: "Marketing",      icon: "📣", feature: "marketing" },
+  { href: "/admin/notifications",  label: "Notifications",  icon: "🔔", feature: "notifications" },
+  { href: "/admin/reports",        label: "Reports",        icon: "📊", feature: "reports" },
   { href: "/admin/users",      label: "Users",      icon: "👤", feature: "users" },
   { href: "/kiosk",            label: "Kiosk",      icon: "📲", feature: "kiosk" },
 ];

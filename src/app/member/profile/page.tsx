@@ -322,6 +322,124 @@ function PhotoSection() {
   );
 }
 
+// ── Push Notifications ───────────────────────────────────────────────────────
+
+function PushSection() {
+  const [status,    setStatus]    = useState<"idle" | "loading" | "subscribed" | "unsupported">("idle");
+  const [subState,  setSubState]  = useState<"unknown" | "granted" | "denied" | "default">("unknown");
+  const [msg,       setMsg]       = useState<string | null>(null);
+
+  async function checkState() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setSubState("denied");
+      return;
+    }
+    const perm = Notification.permission;
+    setSubState(perm as typeof subState);
+    if (perm === "granted") {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) setStatus("subscribed");
+    }
+  }
+
+  useEffect(() => { checkState(); }, []);
+
+  async function subscribe() {
+    if (!("serviceWorker" in navigator)) { setMsg("Not supported in this browser"); return; }
+    setStatus("loading");
+    setMsg(null);
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      const vapidRes = await fetch("/api/push/vapid-public-key");
+      const { publicKey } = await vapidRes.json();
+
+      const urlBase64ToUint8 = (base64: string) => {
+        const padded = base64.replace(/-/g, "+").replace(/_/g, "/").padEnd(base64.length + (4 - base64.length % 4) % 4, "=");
+        const raw = atob(padded);
+        return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+      };
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8(publicKey),
+      });
+
+      const json = sub.toJSON();
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint, keys: json.keys }),
+      });
+
+      setStatus("subscribed");
+      setSubState("granted");
+      setMsg("Notifications enabled!");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed";
+      setMsg(message.includes("denied") ? "Permission denied in browser" : "Failed to subscribe");
+      setStatus("idle");
+    }
+  }
+
+  async function unsubscribe() {
+    setStatus("loading");
+    setMsg(null);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch("/api/push/subscribe", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      setStatus("idle");
+      setMsg("Notifications disabled");
+    } catch {
+      setMsg("Failed to unsubscribe");
+      setStatus("idle");
+    }
+  }
+
+  if (subState === "denied") return null;
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Push Notifications</h2>
+      <p className="text-sm text-gray-400">
+        Get notified about class changes, announcements, and updates from the gym.
+      </p>
+      <div className="flex items-center gap-4">
+        {status === "subscribed" ? (
+          <button
+            onClick={unsubscribe}
+            disabled={status !== "subscribed"}
+            className="px-4 py-2 text-sm font-medium border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white rounded-lg transition"
+          >
+            Disable notifications
+          </button>
+        ) : (
+          <button
+            onClick={subscribe}
+            disabled={status === "loading"}
+            className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition"
+          >
+            {status === "loading" ? "Enabling…" : "Enable notifications"}
+          </button>
+        )}
+        {msg && (
+          <span className={`text-sm ${msg.includes("denied") || msg.includes("Failed") ? "text-red-400" : "text-green-400"}`}>
+            {msg}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── QR Check-in Card ─────────────────────────────────────────────────────────
 
 function QRSection() {
@@ -401,6 +519,7 @@ export default function ProfilePage() {
       <ContactSection />
       <PasswordSection />
       <CardSection />
+      <PushSection />
       <QRSection />
     </div>
   );
