@@ -37,13 +37,15 @@ function groupByDay(classes: ScheduleClass[]) {
 export default function SchedulePage() {
   const [classes, setClasses] = useState<ScheduleClass[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/member/schedule")
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setClasses)
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -87,6 +89,14 @@ export default function SchedulePage() {
       <div className="flex items-center justify-center h-40 gap-3 text-gray-400">
         <div className="w-5 h-5 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin" />
         Loading schedule…
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+        <p className="text-gray-400 text-sm">Could not load the schedule. Your account may not be linked to a member record — contact your gym administrator.</p>
       </div>
     );
   }
