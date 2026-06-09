@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/require-auth";
 import { prisma } from "@/lib/prisma";
 
-async function getAuthUserId(): Promise<number | null> {
-  const session = await auth();
-  const id = (session?.user as { id?: string })?.id;
-  return id ? parseInt(id, 10) : null;
-}
-
 export async function POST(req: Request) {
-  const userId = await getAuthUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { session, error } = await requireAuth();
+  if (error) return error;
+  const userId = parseInt((session.user as { id: string }).id, 10);
 
   const { endpoint, keys } = await req.json();
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
@@ -27,8 +22,9 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const userId = await getAuthUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { session, error } = await requireAuth();
+  if (error) return error;
+  const userId = parseInt((session.user as { id: string }).id, 10);
 
   const { endpoint } = await req.json();
   if (!endpoint) return NextResponse.json({ error: "Missing endpoint" }, { status: 400 });

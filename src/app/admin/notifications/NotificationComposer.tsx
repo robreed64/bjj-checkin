@@ -10,9 +10,8 @@ export default function NotificationComposer({ members }: { members: Member[] })
   const [url,       setUrl]       = useState("/");
   const [userId,    setUserId]    = useState<number | "all">("all");
   const [search,    setSearch]    = useState("");
-  const [sending,   setSending]   = useState(false);
-  const [result,    setResult]    = useState<string | null>(null);
-  const [isError,   setIsError]   = useState(false);
+  const [sending, setSending] = useState(false);
+  const [result,  setResult]  = useState<{ msg: string; ok: boolean } | null>(null);
 
   const filtered = search.trim()
     ? members.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))
@@ -36,13 +35,11 @@ export default function NotificationComposer({ members }: { members: Member[] })
 
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      setIsError(false);
-      setResult(`Sent to ${data.sent} device${data.sent !== 1 ? "s" : ""}`);
+      setResult({ msg: `Sent to ${data.sent} device${data.sent !== 1 ? "s" : ""}`, ok: true });
       setTitle("");
       setBody("");
     } else {
-      setIsError(true);
-      setResult(data.error ?? "Send failed");
+      setResult({ msg: data.error ?? "Send failed", ok: false });
     }
     setSending(false);
   }
@@ -146,8 +143,8 @@ export default function NotificationComposer({ members }: { members: Member[] })
       </div>
 
       {result && (
-        <div className={`text-sm px-4 py-3 rounded-lg border ${isError ? "bg-red-900/30 border-red-800 text-red-300" : "bg-green-900/30 border-green-800 text-green-300"}`}>
-          {result}
+        <div className={`text-sm px-4 py-3 rounded-lg border ${result.ok ? "bg-green-900/30 border-green-800 text-green-300" : "bg-red-900/30 border-red-800 text-red-300"}`}>
+          {result.msg}
         </div>
       )}
 

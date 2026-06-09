@@ -19,28 +19,15 @@ export default function FamilyDiscountActions({ memberId, discountApplied, disco
     return <span className="text-xs text-gray-700">No subscription</span>;
   }
 
-  async function apply() {
+  async function action(method: "POST" | "DELETE") {
     setLoading(true);
     setError(null);
-    const res = await fetch(`/api/admin/families/${memberId}/discount`, { method: "POST" });
+    const res = await fetch(`/api/admin/families/${memberId}/discount`, { method });
     if (res.ok) {
       router.refresh();
     } else {
       const d = await res.json().catch(() => ({}));
-      setError(d.error ?? "Failed to apply discount");
-    }
-    setLoading(false);
-  }
-
-  async function remove() {
-    setLoading(true);
-    setError(null);
-    const res = await fetch(`/api/admin/families/${memberId}/discount`, { method: "DELETE" });
-    if (res.ok) {
-      router.refresh();
-    } else {
-      const d = await res.json().catch(() => ({}));
-      setError(d.error ?? "Failed to remove discount");
+      setError(d.error ?? (method === "POST" ? "Failed to apply discount" : "Failed to remove discount"));
     }
     setLoading(false);
   }
@@ -53,7 +40,7 @@ export default function FamilyDiscountActions({ memberId, discountApplied, disco
             {discountPercent}% off
           </span>
           <button
-            onClick={remove}
+            onClick={() => action("DELETE")}
             disabled={loading}
             className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 transition"
           >
@@ -62,7 +49,7 @@ export default function FamilyDiscountActions({ memberId, discountApplied, disco
         </>
       ) : (
         <button
-          onClick={apply}
+          onClick={() => action("POST")}
           disabled={loading}
           className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50 transition"
         >
