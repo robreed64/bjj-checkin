@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
+import bcrypt from "bcryptjs";
+import { sendEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -81,6 +83,36 @@ export async function POST(req: NextRequest) {
         startDate:            new Date(),
       },
     });
+  }
+
+  // Auto-create portal account if email provided and no account already exists
+  if (member.email) {
+    const existingUser = await prisma.user.findUnique({ where: { email: member.email } });
+    if (!existingUser) {
+      try {
+        const tempPassword = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+        await prisma.user.create({
+          data: {
+            email:        member.email,
+            name:         member.name,
+            passwordHash: await bcrypt.hash(tempPassword, 10),
+            role:         "member",
+            memberId:     member.id,
+          },
+        });
+        await sendEmail(
+          member.email,
+          "Welcome — your member portal login",
+          `<p>Hi ${member.name},</p>
+<p>Your account has been created. You can log in to the member portal at <strong>/login</strong>.</p>
+<p><strong>Email:</strong> ${member.email}<br>
+<strong>Temporary password:</strong> ${tempPassword}</p>
+<p>Please change your password after logging in.</p>`
+        ).catch(() => {});
+      } catch {
+        // Account creation failure should never block enrollment
+      }
+    }
   }
 
   return NextResponse.json({ success: true, memberId: member.id });

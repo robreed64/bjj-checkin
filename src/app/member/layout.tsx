@@ -7,9 +7,11 @@ import LogoutButton from "../portal/LogoutButton";
 
 const NAV = [
   { href: "/member",            label: "Home",       icon: "🏠" },
+  { href: "/member/schedule",   label: "Schedule",   icon: "📅" },
   { href: "/member/attendance", label: "Attendance", icon: "📋" },
   { href: "/member/progress",   label: "Progress",   icon: "🥋" },
   { href: "/member/curriculum", label: "Curriculum", icon: "📖" },
+  { href: "/member/profile",    label: "Profile",    icon: "👤" },
 ];
 
 export default async function MemberLayout({ children }: { children: ReactNode }) {
