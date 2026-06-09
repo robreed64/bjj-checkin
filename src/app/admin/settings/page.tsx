@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import PasswordInput from "@/components/PasswordInput";
 
 type GymSettings = {
   gymName: string;
@@ -308,8 +309,7 @@ export default function SettingsPage() {
               Secret Key
               {settings.stripeSecretKey && <span className="ml-2 font-mono text-gray-600 text-xs">(current: {maskKey(settings.stripeSecretKey)})</span>}
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={stripeSk}
               onChange={e => setStripeSk(e.target.value)}
               className={input}
@@ -323,8 +323,7 @@ export default function SettingsPage() {
               Webhook Signing Secret
               {settings.stripeWebhookSecret && <span className="ml-2 font-mono text-gray-600 text-xs">(current: {maskKey(settings.stripeWebhookSecret)})</span>}
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={stripeWh}
               onChange={e => setStripeWh(e.target.value)}
               className={input}
@@ -354,8 +353,7 @@ export default function SettingsPage() {
               API Key
               {settings.brevoApiKey && <span className="ml-2 font-mono text-gray-600 text-xs">(current: {maskKey(settings.brevoApiKey)})</span>}
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={brevoKey}
               onChange={e => setBrevoKey(e.target.value)}
               className={input}
@@ -491,15 +489,15 @@ export default function SettingsPage() {
           {pwStatus === "error" && <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg px-4 py-3">{pwMsg}</div>}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Current Password</label>
-            <input type="password" required value={pwCurrent} onChange={e => setPwCurrent(e.target.value)} className={input} />
+            <PasswordInput required value={pwCurrent} onChange={e => setPwCurrent(e.target.value)} className={input} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">New Password</label>
-            <input type="password" required value={pwNext} onChange={e => setPwNext(e.target.value)} className={input} />
+            <PasswordInput required value={pwNext} onChange={e => setPwNext(e.target.value)} className={input} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Confirm New Password</label>
-            <input type="password" required value={pwConfirm} onChange={e => setPwConfirm(e.target.value)} className={input} />
+            <PasswordInput required value={pwConfirm} onChange={e => setPwConfirm(e.target.value)} className={input} />
           </div>
           <SaveButton loading={pwStatus === "loading"} status={pwStatus} />
         </form>

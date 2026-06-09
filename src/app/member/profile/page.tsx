@@ -5,6 +5,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import QRCode from "react-qr-code";
 import PhotoUploader from "@/components/PhotoUploader";
+import PasswordInput from "@/components/PasswordInput";
 
 // ── Contact Info ─────────────────────────────────────────────────────────────
 
@@ -103,12 +104,21 @@ function PasswordSection() {
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Change Password</h2>
       <div className="space-y-3 max-w-sm">
-        <Field label="Current password" value={form.currentPassword} type="password"
-          onChange={v => setForm(p => ({ ...p, currentPassword: v }))} />
-        <Field label="New password (min 8 chars)" value={form.newPassword} type="password"
-          onChange={v => setForm(p => ({ ...p, newPassword: v }))} />
-        <Field label="Confirm new password" value={form.confirm} type="password"
-          onChange={v => setForm(p => ({ ...p, confirm: v }))} />
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Current password</label>
+          <PasswordInput value={form.currentPassword} onChange={e => setForm(p => ({ ...p, currentPassword: e.target.value }))}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">New password (min 8 chars)</label>
+          <PasswordInput value={form.newPassword} onChange={e => setForm(p => ({ ...p, newPassword: e.target.value }))}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Confirm new password</label>
+          <PasswordInput value={form.confirm} onChange={e => setForm(p => ({ ...p, confirm: e.target.value }))}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition" />
+        </div>
       </div>
       <div className="flex items-center gap-4 pt-1">
         <button

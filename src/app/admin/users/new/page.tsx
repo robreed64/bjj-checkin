@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import PasswordInput from "@/components/PasswordInput";
 
 const input = "w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm";
 const select = "w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-blue-500 text-sm";
@@ -83,8 +84,8 @@ export default function NewUserPage() {
 
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1">Temporary Password</label>
-          <input
-            type="password" required value={password}
+          <PasswordInput
+            required value={password}
             onChange={e => setPassword(e.target.value)}
             className={input} placeholder="Min 6 characters"
             autoComplete="new-password"

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function CreateMemberAccount({
   memberId,
@@ -157,8 +158,7 @@ export default function CreateMemberAccount({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-gray-400 mb-1">New Password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={resetPw}
                   onChange={e => setResetPw(e.target.value)}
                   placeholder="Min. 8 characters"

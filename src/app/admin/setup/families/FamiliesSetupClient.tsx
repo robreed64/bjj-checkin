@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import PasswordInput from "@/components/PasswordInput";
 
 type Child = { id: number; name: string; ageGroup: string | null; beltRank: string | null; attendanceCount: number };
 type Family = { id: number; name: string; beltRank: string | null; portalEmail: string | null; children: Child[] };
@@ -117,8 +118,7 @@ export default function FamiliesSetupClient({ families: initial }: { families: F
             <div className="mt-4 p-4 rounded-xl bg-gray-800 border border-gray-700 space-y-3">
               <p className="text-sm font-medium text-white">Reset Portal Password</p>
               {pwError && <p className="text-xs text-red-400">{pwError}</p>}
-              <input
-                type="password"
+              <PasswordInput
                 value={newPw}
                 onChange={e => setNewPw(e.target.value)}
                 placeholder="New password (min 8 chars)"

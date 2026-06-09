@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function KioskExitModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
@@ -53,8 +54,7 @@ export default function KioskExitModal({ onClose }: { onClose: () => void }) {
             autoFocus
             className="w-full px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500 transition"
           />
-          <input
-            type="password"
+          <PasswordInput
             value={password}
             onChange={e => setPassword(e.target.value)}
             onKeyDown={e => e.key === "Enter" && submit()}
