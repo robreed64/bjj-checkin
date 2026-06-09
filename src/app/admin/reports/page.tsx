@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { BELT_STYLES, BELT_ORDER } from "@/lib/belt-data";
+import { ExportBar } from "./ExportBar";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -199,11 +200,14 @@ export default async function ReportsPage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Owner Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {d.now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Owner Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {d.now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+          </p>
+        </div>
+        <ExportBar />
       </div>
 
       {/* ── KPI strip ── */}
