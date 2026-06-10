@@ -2,11 +2,10 @@
 
 import { useState, useEffect, FormEvent, Suspense } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import PasswordInput from "@/components/PasswordInput";
 
 function LoginForm() {
-  const router       = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl  = searchParams.get("callbackUrl") ?? "/dashboard";
 
@@ -38,8 +37,7 @@ function LoginForm() {
         setError("Invalid email or password.");
         setLoading(false);
       } else {
-        router.push(callbackUrl);
-        router.refresh();
+        window.location.href = callbackUrl;
       }
     } catch {
       setError("Something went wrong. Please try again.");

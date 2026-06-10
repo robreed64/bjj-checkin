@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
@@ -16,9 +17,10 @@ type Props = {
 export default function AdminSidebar({ nav, gymName, userName, role }: Props) {
   const pathname = usePathname();
   const inSetup = pathname.startsWith("/admin/setup");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  return (
-    <aside className={`w-56 flex-shrink-0 flex flex-col transition-colors ${inSetup ? "bg-amber-950/40 border-r border-amber-800/40" : "bg-gray-900 border-r border-gray-800"}`}>
+  const sidebarContent = (
+    <>
       {/* Header */}
       <div className={`px-5 py-6 border-b ${inSetup ? "border-amber-800/40" : "border-gray-800"}`}>
         <span className="text-lg font-black tracking-tight block">{gymName}</span>
@@ -30,17 +32,18 @@ export default function AdminSidebar({ nav, gymName, userName, role }: Props) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {nav.map((item) => {
           const segment = item.href.startsWith("/admin/")
-          ? item.href.slice("/admin/".length)
-          : item.href.slice(1);
-        const href = inSetup ? `/admin/setup/${segment}` : item.href;
+            ? item.href.slice("/admin/".length)
+            : item.href.slice(1);
+          const href = inSetup ? `/admin/setup/${segment}` : item.href;
           const isActive = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={item.href}
               href={href}
+              onClick={() => setMobileOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
                 isActive
                   ? inSetup
@@ -71,6 +74,7 @@ export default function AdminSidebar({ nav, gymName, userName, role }: Props) {
         {inSetup ? (
           <Link
             href="/admin/members"
+            onClick={() => setMobileOpen(false)}
             className="block text-xs text-amber-400 hover:text-amber-200 transition mt-2 mb-2 font-medium"
           >
             ← Exit Setup
@@ -78,10 +82,10 @@ export default function AdminSidebar({ nav, gymName, userName, role }: Props) {
         ) : (
           role === "admin" && (
             <>
-              <Link href="/admin/setup" className="block text-xs text-gray-500 hover:text-gray-300 transition mt-1 mb-1">
+              <Link href="/admin/setup" onClick={() => setMobileOpen(false)} className="block text-xs text-gray-500 hover:text-gray-300 transition mt-1 mb-1">
                 Setup
               </Link>
-              <Link href="/admin/settings" className="block text-xs text-gray-500 hover:text-gray-300 transition mb-2">
+              <Link href="/admin/settings" onClick={() => setMobileOpen(false)} className="block text-xs text-gray-500 hover:text-gray-300 transition mb-2">
                 Settings
               </Link>
             </>
@@ -89,6 +93,44 @@ export default function AdminSidebar({ nav, gymName, userName, role }: Props) {
         )}
         <LogoutButton />
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile top bar */}
+      <div className={`md:hidden fixed top-0 inset-x-0 z-40 h-14 flex items-center gap-3 px-4 border-b ${inSetup ? "bg-amber-950/90 border-amber-800/40" : "bg-gray-900 border-gray-800"}`}>
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition"
+          aria-label="Open menu"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <span className="font-bold text-white text-sm">{gymName}</span>
+      </div>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/60"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — drawer on mobile, fixed column on desktop */}
+      <aside className={[
+        "flex-col flex-shrink-0 transition-colors",
+        inSetup ? "bg-amber-950/40 border-r border-amber-800/40" : "bg-gray-900 border-r border-gray-800",
+        mobileOpen
+          ? "flex fixed inset-y-0 left-0 z-50 w-72"
+          : "hidden",
+        "md:flex md:static md:w-56 md:z-auto",
+      ].join(" ")}>
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
