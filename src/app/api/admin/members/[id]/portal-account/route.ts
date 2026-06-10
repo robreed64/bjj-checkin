@@ -18,10 +18,16 @@ export async function POST(req: Request, { params }: { params: Params }) {
   if (!member) return NextResponse.json({ error: "Member not found" }, { status: 404 });
 
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+  if (existing) {
+    // If the email already belongs to this member's own account, return it as success
+    if (existing.memberId === memberId) {
+      return NextResponse.json({ id: existing.id, email: existing.email }, { status: 200 });
+    }
+    return NextResponse.json({ error: "That email is already used by another account. Use a different email." }, { status: 409 });
+  }
 
   const existingLinked = await prisma.user.findFirst({ where: { memberId } });
-  if (existingLinked) return NextResponse.json({ error: "Member already has a portal account" }, { status: 409 });
+  if (existingLinked) return NextResponse.json({ error: `This member already has a portal account (${existingLinked.email})` }, { status: 409 });
 
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({

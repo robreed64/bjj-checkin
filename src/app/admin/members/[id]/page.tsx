@@ -123,7 +123,7 @@ export default async function MemberDetailPage({ params }: { params: Params }) {
           <CreateMemberAccount
             memberId={member.id}
             memberName={member.name}
-            existingEmail={member.user?.role === "member" ? member.user.email : null}
+            existingEmail={["member", "parent"].includes(member.user?.role ?? "") ? member.user!.email : null}
           />
           <Link
             href={`/admin/members/${member.id}/edit`}
