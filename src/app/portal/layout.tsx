@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { auth } from "@/auth";
 import { getGymSettings } from "@/lib/gym-settings";
-import LogoutButton from "./LogoutButton";
+import LogoutButton from "@/components/LogoutButton";
 
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const [session, settings] = await Promise.all([auth(), getGymSettings()]);

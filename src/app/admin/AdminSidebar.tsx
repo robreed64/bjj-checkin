@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import LogoutButton from "./LogoutButton";
+import LogoutButton from "@/components/LogoutButton";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -91,7 +91,7 @@ export default function AdminSidebar({ nav, gymName, userName, role }: Props) {
             </>
           )
         )}
-        <LogoutButton />
+        <LogoutButton className="text-xs text-gray-500 hover:text-red-400 transition px-2 py-1 rounded hover:bg-gray-800" />
       </div>
     </>
   );
