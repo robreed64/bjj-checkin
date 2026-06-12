@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/require-auth";
+import { getStripeClient } from "@/lib/stripe";
+import { getGymSettings } from "@/lib/gym-settings";
 
 export async function GET(req: Request) {
-  const { error } = await requireAuth();
+  const { error } = await requireAuth("pos");
   if (error) return error;
 
   const { searchParams } = new URL(req.url);
@@ -27,7 +30,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { error } = await requireAuth();
+  const { error } = await requireAuth("pos");
   if (error) return error;
 
   const {
@@ -37,39 +40,118 @@ export async function POST(req: Request) {
   }: {
     memberId:          number | null;
     paymentMethodType: string;
-    lineItems:         { itemId: number; quantity: number; unitPriceCents: number }[];
+    lineItems:         { itemId: number; quantity: number }[];
   } = await req.json();
 
-  const totalCents = lineItems.reduce((sum, li) => sum + li.unitPriceCents * li.quantity, 0);
+  if (!lineItems?.length) {
+    return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
+  }
 
-  const sale = await prisma.sale.create({
-    data: {
-      memberId:          memberId ?? null,
-      totalCents,
-      paymentMethodType,
-      lineItems: {
-        create: lineItems.map((li) => ({
-          itemId:         li.itemId,
-          quantity:       li.quantity,
-          unitPriceCents: li.unitPriceCents,
-        })),
-      },
-    },
-    include: {
-      lineItems: { include: { item: true } },
-      member:    { select: { id: true, name: true } },
-    },
+  // Server-side prices and tax — never trust client amounts
+  const items = await prisma.item.findMany({
+    where: { id: { in: lineItems.map((li) => li.itemId) } },
   });
+  const itemById = new Map(items.map((i) => [i.id, i]));
 
-  // Decrement stock for items that track it
-  await Promise.all(
-    lineItems.map((li) =>
-      prisma.item.updateMany({
-        where: { id: li.itemId, stock: { not: null } },
-        data:  { stock: { decrement: li.quantity } },
-      })
-    )
-  );
+  let totalCents = 0;
+  const saleLines: { itemId: number; quantity: number; unitPriceCents: number }[] = [];
+  for (const li of lineItems) {
+    const item = itemById.get(li.itemId);
+    if (!item || li.quantity < 1) {
+      return NextResponse.json({ error: "Invalid item in cart" }, { status: 400 });
+    }
+    const lineSubtotal = item.priceCents * li.quantity;
+    totalCents += lineSubtotal + Math.round(lineSubtotal * Number(item.taxRate) / 100);
+    saleLines.push({ itemId: item.id, quantity: li.quantity, unitPriceCents: item.priceCents });
+  }
 
-  return NextResponse.json(sale, { status: 201 });
+  // Charge the saved card before recording anything; declined cards never produce a Sale
+  let stripePaymentIntentId: string | null = null;
+  if (paymentMethodType === "card_on_file") {
+    if (!memberId) {
+      return NextResponse.json({ error: "Select a member to charge their card on file" }, { status: 400 });
+    }
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      select: { stripeCustomerId: true },
+    });
+    if (!member?.stripeCustomerId) {
+      return NextResponse.json({ error: "Member has no card on file" }, { status: 400 });
+    }
+
+    const stripe = await getStripeClient();
+    if (!stripe) {
+      return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
+    }
+
+    const customer = await stripe.customers.retrieve(member.stripeCustomerId, {
+      expand: ["invoice_settings.default_payment_method"],
+    });
+    if ("deleted" in customer) {
+      return NextResponse.json({ error: "Member has no card on file" }, { status: 400 });
+    }
+    const pm = customer.invoice_settings?.default_payment_method;
+    if (!pm || typeof pm === "string") {
+      return NextResponse.json(
+        { error: "No default payment method — ask the member to add a card in the member portal" },
+        { status: 400 }
+      );
+    }
+
+    const settings = await getGymSettings();
+    try {
+      const intent = await stripe.paymentIntents.create({
+        amount:         totalCents,
+        currency:       settings.currency,
+        customer:       customer.id,
+        payment_method: pm.id,
+        off_session:    true,
+        confirm:        true,
+        metadata:       { memberId: String(memberId), source: "pos" },
+      });
+      stripePaymentIntentId = intent.id;
+    } catch (err) {
+      if (err instanceof Stripe.errors.StripeCardError) {
+        return NextResponse.json({ error: `Card declined: ${err.message}` }, { status: 402 });
+      }
+      console.error("POS Stripe charge failed:", err);
+      return NextResponse.json({ error: "Payment failed — try another method" }, { status: 502 });
+    }
+  }
+
+  try {
+    const sale = await prisma.$transaction(async (tx) => {
+      const created = await tx.sale.create({
+        data: {
+          memberId: memberId ?? null,
+          totalCents,
+          paymentMethodType,
+          stripePaymentIntentId,
+          lineItems: { create: saleLines },
+        },
+        include: {
+          lineItems: { include: { item: true } },
+          member:    { select: { id: true, name: true } },
+        },
+      });
+
+      // Decrement stock for items that track it
+      for (const li of saleLines) {
+        await tx.item.updateMany({
+          where: { id: li.itemId, stock: { not: null } },
+          data:  { stock: { decrement: li.quantity } },
+        });
+      }
+      return created;
+    });
+
+    return NextResponse.json(sale, { status: 201 });
+  } catch (err) {
+    // Card was already charged; surface the PI id so the sale can be reconciled in Stripe
+    console.error(`POS sale record failed (paymentIntent: ${stripePaymentIntentId ?? "none"}):`, err);
+    return NextResponse.json(
+      { error: "Sale could not be recorded — check Stripe dashboard before retrying" },
+      { status: 500 }
+    );
+  }
 }

@@ -44,6 +44,7 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [payMethod, setPayMethod] = useState<"cash" | "card_on_file">("cash");
   const [processing, setProcessing] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [receipt, setReceipt]       = useState<{ total: number; id: number } | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -82,25 +83,32 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
   const checkout = async () => {
     if (cart.length === 0) return;
     setProcessing(true);
-    const res = await fetch("/api/admin/pos/sales", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        memberId:          selectedMember?.id ?? null,
-        paymentMethodType: payMethod,
-        lineItems: cart.map((l) => ({
-          itemId:         l.item.id,
-          quantity:       l.quantity,
-          unitPriceCents: l.item.priceCents,
-        })),
-      }),
-    });
-    if (res.ok) {
-      const sale = await res.json();
-      setReceipt({ total, id: sale.id });
-      setCart([]);
-      setSelectedMember(null);
-      setMemberQ("");
+    setCheckoutError(null);
+    try {
+      const res = await fetch("/api/admin/pos/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memberId:          selectedMember?.id ?? null,
+          paymentMethodType: payMethod,
+          lineItems: cart.map((l) => ({
+            itemId:   l.item.id,
+            quantity: l.quantity,
+          })),
+        }),
+      });
+      if (res.ok) {
+        const sale = await res.json();
+        setReceipt({ total: sale.totalCents, id: sale.id });
+        setCart([]);
+        setSelectedMember(null);
+        setMemberQ("");
+      } else {
+        const data = await res.json().catch(() => null);
+        setCheckoutError(data?.error ?? "Checkout failed — try again");
+      }
+    } catch {
+      setCheckoutError("Checkout failed — try again");
     }
     setProcessing(false);
   };
@@ -269,6 +277,11 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
           </div>
 
           {/* Checkout */}
+          {checkoutError && (
+            <p className="text-xs text-red-400 bg-red-900/30 border border-red-800 rounded-lg px-3 py-2">
+              {checkoutError}
+            </p>
+          )}
           <button
             onClick={checkout}
             disabled={cart.length === 0 || processing}
