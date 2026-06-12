@@ -25,6 +25,7 @@ type GymSettings = {
   brevoSmsFrom: string | null;
   familyDiscountEnabled: boolean;
   familyDiscountPercent: number;
+  trialLengthDays: number;
 };
 
 function maskKey(key: string | null | undefined): string {
@@ -111,6 +112,7 @@ export default function SettingsPage() {
   const [waiverStatus,   setWaiverStatus]   = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [taxStatus,      setTaxStatus]      = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [discountStatus, setDiscountStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [trialStatus,    setTrialStatus]    = useState<"idle" | "loading" | "ok" | "error">("idle");
 
   useEffect(() => {
     fetch("/api/admin/settings").then(r => r.json()).then(setSettings);
@@ -274,6 +276,25 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-500 mt-1">Applied to new POS items by default. Override per item as needed.</p>
           </div>
           <SaveButton loading={taxStatus === "loading"} status={taxStatus} />
+        </form>
+      </Section>
+
+      {/* Trials */}
+      <Section title="Trials">
+        <form onSubmit={e => { e.preventDefault(); save({ trialLengthDays: settings.trialLengthDays }, setTrialStatus); }} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Trial Length (days)</label>
+            <input
+              type="number" min={1} max={365}
+              value={settings.trialLengthDays}
+              onChange={e => setSettings({ ...settings, trialLengthDays: parseInt(e.target.value) || 14 })}
+              className="w-48 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-blue-500 text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Used for the days-remaining badge on trial members and the &ldquo;Trial Expiring&rdquo; marketing trigger.
+            </p>
+          </div>
+          <SaveButton loading={trialStatus === "loading"} status={trialStatus} />
         </form>
       </Section>
 

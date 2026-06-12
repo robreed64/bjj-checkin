@@ -4,6 +4,9 @@ import type { Workflow } from "@prisma/client";
 vi.mock("@/lib/prisma", () => import("@/test/prisma-mock"));
 vi.mock("@/lib/email", () => ({ sendEmail: vi.fn() }));
 vi.mock("@/lib/sms", () => ({ sendSMS: vi.fn() }));
+vi.mock("@/lib/gym-settings", () => ({
+  getGymSettings: vi.fn().mockResolvedValue({ trialLengthDays: 14 }),
+}));
 
 import { prisma } from "@/test/prisma-mock";
 import { sendEmail } from "@/lib/email";
@@ -101,6 +104,26 @@ describe("runWorkflow — other triggers", () => {
 
     expect(result.sent).toBe(1);
     expect(sendSMS).toHaveBeenCalledWith("+15551234567", "Happy birthday Bday!");
+  });
+
+  it("trial_expiring targets trials near expiry with days_left var", async () => {
+    // Trial started 12 days ago with a 14-day length → 2 days left, inside the 3-day window
+    const trialStartedAt = new Date(Date.now() - 12 * 24 * 60 * 60 * 1000);
+    prisma.member.findMany.mockResolvedValue([
+      { id: 9, name: "Almost Done", email: "ad@x.com", phone: null, trialStartedAt },
+    ] as never);
+    prisma.message.findMany.mockResolvedValue([]);
+    prisma.message.create.mockResolvedValue({} as never);
+
+    const result = await runWorkflow(workflow({
+      triggerType: "trial_expiring",
+      config: { channel: "email", subject: "Trial ending", body: "{{days_left}} days left, {{name}}!", days_before: 3 },
+    }));
+
+    expect(result.sent).toBe(1);
+    expect(sendEmail).toHaveBeenCalledWith("ad@x.com", "Trial ending", expect.stringContaining("2 days left, Almost!"));
+    const where = prisma.member.findMany.mock.calls[0][0]?.where as { status: string };
+    expect(where.status).toBe("trial");
   });
 
   it("promotion is a no-op with an explanatory note", async () => {

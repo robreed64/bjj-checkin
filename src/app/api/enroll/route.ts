@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     name, email, phone, dateOfBirth, ageGroup, trainingType,
-    planId, stripeCustomerId, paymentMethodId,
+    planId, stripeCustomerId, paymentMethodId, promoCode,
   } = body;
 
   if (!name?.trim() || !email?.trim() || !phone?.trim()) {
@@ -39,9 +39,19 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // Re-validate the promo code server-side; an invalid code never blocks enrollment
+      let promotionCodeId: string | null = null;
+      if (promoCode?.trim()) {
+        try {
+          const codes = await stripe.promotionCodes.list({ code: promoCode.trim(), active: true, limit: 1 });
+          promotionCodeId = codes.data[0]?.id ?? null;
+        } catch { /* enroll without discount */ }
+      }
+
       const sub = await stripe.subscriptions.create({
         customer:         resolvedCustomerId,
         items:            [{ price: plan.stripePriceId }],
+        ...(promotionCodeId && { discounts: [{ promotion_code: promotionCodeId }] }),
         payment_behavior: "default_incomplete",
         expand:           ["latest_invoice.payment_intent"],
       });
@@ -62,6 +72,7 @@ export async function POST(req: NextRequest) {
       trainingType:    trainingType || null,
       beltRank:        "white",
       status:          memberStatus,
+      trialStartedAt:  memberStatus === "trial" ? new Date() : null,
       stripeCustomerId: resolvedCustomerId,
       waiverSignedAt:  new Date(),
     },

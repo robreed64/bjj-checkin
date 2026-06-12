@@ -9,6 +9,7 @@ import AttendanceManager from "./AttendanceManager";
 import BeltStripesEditor from "./BeltStripesEditor";
 import { getNextBelt } from "@/lib/belt-data";
 import { getGymSettings } from "@/lib/gym-settings";
+import { trialDaysLeft, trialBadge } from "@/lib/trial";
 import MemberQRCode from "./MemberQRCode";
 
 const BELT_STYLES: Record<string, { bg: string; text: string }> = {
@@ -94,8 +95,14 @@ export default async function MemberDetailPage({ params }: { params: Params }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-white">{member.name}</h1>
-            <span className={`px-2.5 py-0.5 rounded-full border text-xs font-medium ${pill}`}>
-              {member.status.replace("_", " ")}
+            <span className={`px-2.5 py-0.5 rounded-full border text-xs font-medium ${
+              member.status === "trial" && (trialDaysLeft(member.trialStartedAt, gymSettings.trialLengthDays) ?? 1) <= 0
+                ? "bg-red-500/15 text-red-400 border-red-500/40"
+                : pill
+            }`}>
+              {member.status === "trial"
+                ? trialBadge(member.trialStartedAt, gymSettings.trialLengthDays)
+                : member.status.replace("_", " ")}
             </span>
           </div>
           <div className="mt-2 flex items-center gap-3 flex-wrap">

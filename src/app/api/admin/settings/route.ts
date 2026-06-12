@@ -26,6 +26,7 @@ export async function PATCH(req: Request) {
     "stripePublishableKey", "stripeSecretKey", "stripeWebhookSecret",
     "brevoApiKey", "brevoSenderEmail", "brevoSenderName", "brevoSmsFrom",
     "familyDiscountEnabled", "familyDiscountPercent",
+    "trialLengthDays",
   ];
   const data: Record<string, unknown> = {};
   for (const key of allowed) {
@@ -41,6 +42,14 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Invalid tax rate" }, { status: 400 });
     }
     data.defaultTaxRate = rate;
+  }
+
+  if (data.trialLengthDays !== undefined) {
+    const days = Number(data.trialLengthDays);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      return NextResponse.json({ error: "Trial length must be 1–365 days" }, { status: 400 });
+    }
+    data.trialLengthDays = days;
   }
 
   const settings = await prisma.gymSettings.upsert({

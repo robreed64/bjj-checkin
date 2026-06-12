@@ -10,6 +10,7 @@ type WorkflowConfig = {
   inactivity_days?: number;
   trial_classes?:   number;
   cooldown_days?:   number;
+  days_before?:     number;
 };
 
 type Workflow = {
@@ -24,6 +25,7 @@ type Workflow = {
 const TRIGGERS: { value: string; label: string; hint: string }[] = [
   { value: "inactivity",        label: "Inactivity",        hint: "Member hasn't checked in for N days" },
   { value: "trial_attendance",  label: "Trial Attendance",  hint: "Trial member hits N classes" },
+  { value: "trial_expiring",    label: "Trial Expiring",    hint: "Trial ends in N days" },
   { value: "birthday",          label: "Birthday",          hint: "Member's birthday today" },
   { value: "failed_payment",    label: "Failed Payment",    hint: "Member status is past due" },
   { value: "promotion",         label: "Belt Promotion",    hint: "Fired when a member is promoted" },
@@ -34,6 +36,7 @@ const CHANNELS = ["email", "sms", "in_app"];
 const TRIGGER_PILL: Record<string, string> = {
   inactivity:       "bg-orange-900/40 text-orange-300",
   trial_attendance: "bg-blue-900/40 text-blue-300",
+  trial_expiring:   "bg-amber-900/40 text-amber-300",
   birthday:         "bg-pink-900/40 text-pink-300",
   failed_payment:   "bg-red-900/40 text-red-300",
   promotion:        "bg-green-900/40 text-green-300",
@@ -48,13 +51,14 @@ const CHANNEL_PILL: Record<string, string> = {
 const VARS_HINT: Record<string, string> = {
   inactivity:       "{{name}}, {{days}}",
   trial_attendance: "{{name}}, {{classes}}",
+  trial_expiring:   "{{name}}, {{days_left}}",
   birthday:         "{{name}}",
   failed_payment:   "{{name}}",
   promotion:        "{{name}}, {{belt}}",
 };
 
 const EMPTY_CONFIG: WorkflowConfig = {
-  channel: "email", subject: "", body: "", inactivity_days: 30, trial_classes: 3, cooldown_days: 30,
+  channel: "email", subject: "", body: "", inactivity_days: 30, trial_classes: 3, cooldown_days: 30, days_before: 3,
 };
 
 function emptyForm(triggerType = "inactivity") {
@@ -233,6 +237,13 @@ export default function WorkflowManager({ initialWorkflows }: { initialWorkflows
                 <Field label="Number of trial classes to trigger on">
                   <input type="number" min={1} value={form.config.trial_classes ?? 3}
                     onChange={(e) => setConfig({ trial_classes: Number(e.target.value) })}
+                    className="w-32 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500 transition" />
+                </Field>
+              )}
+              {form.triggerType === "trial_expiring" && (
+                <Field label="Days before trial expiry to trigger">
+                  <input type="number" min={1} value={form.config.days_before ?? 3}
+                    onChange={(e) => setConfig({ days_before: Number(e.target.value) })}
                     className="w-32 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500 transition" />
                 </Field>
               )}

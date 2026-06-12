@@ -127,6 +127,25 @@ async function getData() {
     }),
   ]);
 
+  // Trial funnel: members whose trial started in the last 90 days, by current status.
+  // Only counts trials started after trialStartedAt tracking shipped.
+  const trialFunnel = await prisma.member.groupBy({
+    by: ["status"],
+    where: { trialStartedAt: { gte: daysAgo(90) } },
+    _count: { id: true },
+  });
+  const funnelMap: Record<string, number> = {};
+  for (const r of trialFunnel) funnelMap[r.status] = r._count.id;
+  const trialsConverted = (funnelMap.active ?? 0) + (funnelMap.past_due ?? 0);
+  const trialsLost      = (funnelMap.inactive ?? 0) + (funnelMap.canceled ?? 0);
+  const trialsPending   = funnelMap.trial ?? 0;
+
+  // Churn: subscriptions canceled in the last 30 days (canceledAt accrues from
+  // when this metric shipped — historical cancellations aren't recorded)
+  const canceledLast30 = await prisma.subscription.count({
+    where: { canceledAt: { gte: last30 } },
+  });
+
   // MRR calculation (normalize annual → monthly)
   const mrr = activeSubs.reduce((sum, s) => {
     const cents = s.plan.billingInterval === "yearly"
@@ -181,6 +200,11 @@ async function getData() {
     topAttendees: topAttendees.map((r) => ({ name: r.name, count: Number(r.count) })),
     posCategoryTotals,
     recentSales,
+    trialsConverted,
+    trialsLost,
+    trialsPending,
+    canceledLast30,
+    activeSubCount: activeSubs.length,
   };
 }
 
@@ -189,7 +213,6 @@ async function getData() {
 export default async function ReportsPage() {
   const d = await getData();
 
-  const activePct  = d.totalMembers ? Math.round(((d.statusMap.active  ?? 0) / d.totalMembers) * 100) : 0;
   const pastDuePct = d.totalMembers ? Math.round(((d.statusMap.past_due ?? 0) / d.totalMembers) * 100) : 0;
 
   const maxDow    = Math.max(1, ...Object.values(d.attendanceByDow));
@@ -343,11 +366,29 @@ export default async function ReportsPage() {
       </div>
 
       {/* ── Highlights ── */}
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Highlight
-          label="Trial Conversion Rate"
-          value={d.statusMap.trial ? `${activePct}% active` : "—"}
-          sub={`${d.statusMap.trial ?? 0} still on trial`}
+          label="Trial Conversion (90d)"
+          value={
+            d.trialsConverted + d.trialsLost > 0
+              ? `${Math.round((d.trialsConverted / (d.trialsConverted + d.trialsLost)) * 100)}%`
+              : "—"
+          }
+          sub={
+            d.trialsConverted + d.trialsLost > 0
+              ? `${d.trialsConverted} of ${d.trialsConverted + d.trialsLost} resolved · ${d.trialsPending} pending`
+              : `${d.trialsPending} trials in progress`
+          }
+        />
+        <Highlight
+          label="Churn (30d)"
+          value={
+            d.canceledLast30 + d.activeSubCount > 0
+              ? `${Math.round((d.canceledLast30 / (d.canceledLast30 + d.activeSubCount)) * 100)}%`
+              : "—"
+          }
+          sub={`${d.canceledLast30} canceled subscription${d.canceledLast30 === 1 ? "" : "s"}`}
+          warn={d.canceledLast30 > 0}
         />
         <Highlight
           label="Past Due Members"
@@ -361,6 +402,10 @@ export default async function ReportsPage() {
           sub="Not yet enrolled"
         />
       </div>
+      <p className="mt-3 text-xs text-gray-600">
+        Conversion and churn track data recorded from June 2026 onward (trial start dates and
+        cancellation timestamps weren&apos;t captured before then).
+      </p>
     </div>
   );
 }

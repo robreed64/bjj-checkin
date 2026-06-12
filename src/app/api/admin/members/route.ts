@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       beltRank:    beltRank  || "white",
       trainingType: trainingType || null,
       status:      status    || "active",
+      trialStartedAt: status === "trial" ? new Date() : null,
     },
   });
 

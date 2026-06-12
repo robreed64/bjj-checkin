@@ -2,6 +2,7 @@ import type { Workflow } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { sendSMS } from "@/lib/sms";
+import { getGymSettings } from "@/lib/gym-settings";
 
 type WorkflowConfig = {
   channel:        string;
@@ -10,6 +11,7 @@ type WorkflowConfig = {
   inactivity_days?: number;
   trial_classes?:   number;
   cooldown_days?:   number;
+  days_before?:     number;
 };
 
 type Target = {
@@ -98,6 +100,35 @@ export async function runWorkflow(workflow: Workflow): Promise<WorkflowRunResult
         AND EXTRACT(DAY   FROM date_of_birth) = ${day}
     `;
     targets = members.map((m) => ({ id: m.id, name: m.name, email: m.email, phone: m.phone, vars: { name: m.name.split(" ")[0] } }));
+  }
+
+  // ── Trial expiring ───────────────────────────────────────────────────────────
+  // Trials within `days_before` of expiry (expiry = trialStartedAt + trialLengthDays)
+  if (workflow.triggerType === "trial_expiring") {
+    const daysBefore  = config.days_before ?? 3;
+    const settings    = await getGymSettings();
+    const trialLength = settings.trialLengthDays;
+    const dayMs       = 24 * 60 * 60 * 1000;
+    // Expiring within the window ⇔ trialStartedAt in (now - trialLength, now - trialLength + daysBefore]
+    const startMin = new Date(now.getTime() - trialLength * dayMs);
+    const startMax = new Date(now.getTime() - (trialLength - daysBefore) * dayMs);
+
+    const members = await prisma.member.findMany({
+      where: {
+        status: "trial",
+        trialStartedAt: { gt: startMin, lte: startMax },
+      },
+      select: { id: true, name: true, email: true, phone: true, trialStartedAt: true },
+    });
+
+    targets = members.map((m) => {
+      const expiresAt = new Date(m.trialStartedAt!.getTime() + trialLength * dayMs);
+      const daysLeft  = Math.max(0, Math.ceil((expiresAt.getTime() - now.getTime()) / dayMs));
+      return {
+        id: m.id, name: m.name, email: m.email, phone: m.phone,
+        vars: { name: m.name.split(" ")[0], days_left: String(daysLeft) },
+      };
+    });
   }
 
   // ── Failed payment ───────────────────────────────────────────────────────────

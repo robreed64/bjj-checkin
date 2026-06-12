@@ -24,9 +24,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   if (isNaN(memberId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
   const body = await req.json();
+
+  // Stamp the trial start when a member first enters trial status
+  let trialStart: Date | undefined;
+  if (body.status === "trial") {
+    const current = await prisma.member.findUnique({
+      where: { id: memberId },
+      select: { status: true, trialStartedAt: true },
+    });
+    if (current && (current.status !== "trial" || !current.trialStartedAt)) {
+      trialStart = new Date();
+    }
+  }
+
   const member = await prisma.member.update({
     where: { id: memberId },
     data: {
+      ...(trialStart && { trialStartedAt: trialStart }),
       ...(body.name        !== undefined && { name: body.name }),
       ...(body.email       !== undefined && { email: body.email || null }),
       ...(body.phone       !== undefined && { phone: body.phone || null }),

@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
       const newStatus = subStatus[sub.status] ?? "inactive";
+      if (newStatus === "canceled") {
+        // Stamp canceledAt only on the transition into canceled (feeds churn reporting)
+        await prisma.subscription.updateMany({
+          where: { stripeSubscriptionId: sub.id, status: { not: "canceled" } },
+          data: { canceledAt: new Date() },
+        });
+      }
       await prisma.subscription.updateMany({
         where: { stripeSubscriptionId: sub.id },
         data: { status: newStatus, updatedAt: new Date() },

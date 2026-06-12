@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
+import { getGymSettings } from "@/lib/gym-settings";
+import { trialDaysLeft, trialBadge } from "@/lib/trial";
 import MemberFilters from "./MemberFilters";
 
 const PAGE_SIZE = 20;
@@ -41,7 +43,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
     ...(group  && { ageGroup: group }),
   };
 
-  const [members, total] = await Promise.all([
+  const [members, total, settings] = await Promise.all([
     prisma.member.findMany({
       where,
       orderBy: { name: "asc" },
@@ -50,11 +52,12 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
       select: {
         id: true, name: true, email: true, beltRank: true,
         status: true, trainingType: true, ageGroup: true,
-        photoUrl: true, createdAt: true,
+        photoUrl: true, createdAt: true, trialStartedAt: true,
         _count: { select: { attendance: true } },
       },
     }),
     prisma.member.count({ where }),
+    getGymSettings(),
   ]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -67,12 +70,20 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
           <h1 className="text-2xl font-bold">Members</h1>
           <p className="text-gray-400 text-sm mt-0.5">{total} total</p>
         </div>
-        <Link
-          href="/admin/members/new"
-          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold transition"
-        >
-          + Add Member
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/members/at-risk"
+            className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm font-semibold text-gray-300 hover:text-white transition"
+          >
+            At-risk
+          </Link>
+          <Link
+            href="/admin/members/new"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold transition"
+          >
+            + Add Member
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -134,9 +145,19 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>
-                      {m.status.replace("_", " ")}
-                    </span>
+                    {m.status === "trial" ? (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        (trialDaysLeft(m.trialStartedAt, settings.trialLengthDays) ?? 1) <= 0
+                          ? "bg-red-500/15 text-red-400"
+                          : pill
+                      }`}>
+                        {trialBadge(m.trialStartedAt, settings.trialLengthDays)}
+                      </span>
+                    ) : (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>
+                        {m.status.replace("_", " ")}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-300">{m.trainingType ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-300 capitalize">{m.ageGroup ?? "—"}</td>
