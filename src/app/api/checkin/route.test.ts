@@ -142,6 +142,25 @@ describe("POST /api/checkin", () => {
     expect(prisma.attendance.create).toHaveBeenCalled(); // door policy: they still train
   });
 
+  it("day check-in (no class) marks all of today's booked classes attended", async () => {
+    prisma.member.findUnique.mockResolvedValue(member);
+    prisma.attendance.create.mockResolvedValue({ id: 105 } as never);
+    prisma.attendance.count.mockResolvedValue(20);
+    prisma.booking.updateMany.mockResolvedValue({ count: 3 } as never);
+
+    const res = await POST(checkinRequest({ memberId: 5 }));
+
+    expect(res.status).toBe(200);
+    expect(prisma.booking.updateMany).toHaveBeenCalledWith({
+      where: {
+        memberId: 5,
+        status: "booked",
+        class: { startTime: { gte: expect.any(Date), lte: expect.any(Date) } },
+      },
+      data: { status: "attended" },
+    });
+  });
+
   it("returns the existing attendance instead of duplicating a recent check-in", async () => {
     prisma.member.findUnique.mockResolvedValue(member);
     prisma.attendance.findFirst.mockResolvedValue({ id: 55 } as never);

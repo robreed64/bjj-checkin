@@ -61,6 +61,22 @@ export async function POST(req: NextRequest) {
       await prisma.booking.create({ data: { memberId: member.id, classId, status: "attended" } });
     }
     // existing "attended" → nothing to do
+  } else {
+    // Day check-in (kiosk default): one sign-in covers every class they came
+    // for — mark all their booked classes in today's window attended
+    await prisma.booking.updateMany({
+      where: {
+        memberId: member.id,
+        status: "booked",
+        class: {
+          startTime: {
+            gte: new Date(Date.now() - 2 * 60 * 60 * 1000),  // started recently (running late)
+            lte: new Date(Date.now() + 12 * 60 * 60 * 1000), // or later today
+          },
+        },
+      },
+      data: { status: "attended" },
+    });
   }
 
   const totalClasses = await prisma.attendance.count({ where: { memberId: member.id } });

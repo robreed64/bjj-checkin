@@ -91,8 +91,6 @@ function Initials({ name }: { name: string }) {
   );
 }
 
-type ActiveClass = { id: number; name: string; startTime: string; endTime: string };
-
 export default function KioskPage() {
   const [gymName, setGymName] = useState("BJJ Check-In");
   const [showExit, setShowExit] = useState(false);
@@ -124,8 +122,6 @@ export default function KioskPage() {
   const [selected, setSelected] = useState<MemberResult | null>(null);
   const [checkInState, setCheckInState] = useState<CheckInState>("idle");
   const [searching, setSearching] = useState(false);
-  const [activeClasses, setActiveClasses] = useState<ActiveClass[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
   const [milestone, setMilestone] = useState<number | null>(null);
   const [waiverText, setWaiverText] = useState("");
   const [waiverFlow, setWaiverFlow] = useState<{ id: number; name: string } | null>(null);
@@ -139,13 +135,6 @@ export default function KioskPage() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    fetch("/api/admin/classes/active")
-      .then((r) => r.json())
-      .then((data) => { setActiveClasses(data); if (data.length === 1) setSelectedClassId(data[0].id); })
-      .catch(() => {});
-  }, []);
 
   const search = useCallback(async (q: string) => {
     if (q.length < 2) { setResults([]); setSearching(false); return; }
@@ -191,7 +180,7 @@ export default function KioskPage() {
       const res = await fetch("/api/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId: selected.id, classId: selectedClassId }),
+        body: JSON.stringify({ memberId: selected.id }),
       });
       // A 2xx with an unparseable body still means the check-in was recorded
       const data = await res.json().catch(() => ({}));
@@ -215,7 +204,7 @@ export default function KioskPage() {
       const res = await fetch("/api/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, classId: selectedClassId }),
+        body: JSON.stringify({ token }),
       });
       // A 2xx with an unparseable body still means the check-in was recorded
       const data = await res.json().catch(() => ({}));
@@ -236,7 +225,7 @@ export default function KioskPage() {
     }
     // Reset after 3 seconds and re-open scanner
     setTimeout(() => setScanResult(null), 3000);
-  }, [selectedClassId]);
+  }, []);
 
   // Waiver signed → check-in completed inside WaiverScreen; route result to the active mode
   const handleWaiverComplete = useCallback((data: { milestone?: number | null; member?: { name: string; beltRank: string | null } }) => {
@@ -303,7 +292,6 @@ export default function KioskPage() {
       {waiverFlow && (
         <WaiverScreen
           member={waiverFlow}
-          classId={selectedClassId}
           waiverText={waiverText}
           onComplete={handleWaiverComplete}
           onCancel={() => setWaiverFlow(null)}
@@ -406,28 +394,6 @@ export default function KioskPage() {
                     return <span className={`px-3 py-1 rounded-full border text-sm font-medium ${s.badge}`}>{s.label}</span>;
                   })()}
 
-                  {activeClasses.length > 0 && checkInState === "idle" && (
-                    <div className="w-full">
-                      <p className="text-xs text-gray-500 mb-2 text-center">Checking into</p>
-                      <div className="flex flex-col gap-1.5">
-                        {activeClasses.map((c) => (
-                          <button key={c.id} onClick={() => setSelectedClassId(selectedClassId === c.id ? null : c.id)}
-                            className={`w-full px-4 py-2.5 rounded-xl text-sm font-medium border transition ${
-                              selectedClassId === c.id ? "border-blue-500 bg-blue-600/20 text-blue-300" : "border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600"
-                            }`}>
-                            {c.name}{selectedClassId === c.id && " ✓"}
-                          </button>
-                        ))}
-                        <button onClick={() => setSelectedClassId(null)}
-                          className={`w-full px-4 py-2 rounded-xl text-sm border transition ${
-                            selectedClassId === null ? "border-gray-500 bg-gray-700 text-gray-300" : "border-gray-800 text-gray-600 hover:border-gray-700"
-                          }`}>
-                          Open mat / no class
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   {checkInState === "success" ? (
                     <div className="mt-2 flex flex-col items-center gap-2">
                       {milestone && <Confetti />}
@@ -512,27 +478,6 @@ export default function KioskPage() {
             <QRScannerView onScan={handleQRScan} />
           )}
 
-          {activeClasses.length > 0 && !scanResult && (
-            <div className="w-full">
-              <p className="text-xs text-gray-500 mb-2 text-center">Class to check into</p>
-              <div className="flex flex-col gap-1.5">
-                {activeClasses.map((c) => (
-                  <button key={c.id} onClick={() => setSelectedClassId(selectedClassId === c.id ? null : c.id)}
-                    className={`w-full px-4 py-2.5 rounded-xl text-sm font-medium border transition ${
-                      selectedClassId === c.id ? "border-blue-500 bg-blue-600/20 text-blue-300" : "border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600"
-                    }`}>
-                    {c.name}{selectedClassId === c.id && " ✓"}
-                  </button>
-                ))}
-                <button onClick={() => setSelectedClassId(null)}
-                  className={`w-full px-4 py-2 rounded-xl text-sm border transition ${
-                    selectedClassId === null ? "border-gray-500 bg-gray-700 text-gray-300" : "border-gray-800 text-gray-600 hover:border-gray-700"
-                  }`}>
-                  Open mat / no class
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

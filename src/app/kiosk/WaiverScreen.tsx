@@ -12,13 +12,12 @@ type CheckinResult = {
 
 type Props = {
   member: { id: number; name: string };
-  classId: number | null;
   waiverText: string;
   onComplete: (data: CheckinResult) => void;
   onCancel: () => void;
 };
 
-export default function WaiverScreen({ member, classId, waiverText, onComplete, onCancel }: Props) {
+export default function WaiverScreen({ member, waiverText, onComplete, onCancel }: Props) {
   const [signed, setSigned] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -38,7 +37,7 @@ export default function WaiverScreen({ member, classId, waiverText, onComplete, 
       const checkinRes = await fetch("/api/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId: member.id, classId }),
+        body: JSON.stringify({ memberId: member.id }),
       });
       const data = await checkinRes.json();
       if (!checkinRes.ok || !data.success) throw new Error();
