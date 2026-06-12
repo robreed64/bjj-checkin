@@ -10,6 +10,7 @@ export default async function SetupPosPage() {
   ]);
 
   const categories = (settings.posCategories as string[]) ?? ["drinks", "gear", "events"];
+  if (!categories.includes("day_pass")) categories.push("day_pass");
 
   return (
     <div className="p-8 max-w-3xl">
