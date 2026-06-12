@@ -5,8 +5,39 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import KioskExitModal from "./KioskExitModal";
+import WaiverScreen from "./WaiverScreen";
 
 const QRScannerView = dynamic(() => import("./QRScannerView"), { ssr: false });
+
+const CONFETTI_COLORS = ["#3b82f6", "#22c55e", "#eab308", "#ef4444", "#a855f7", "#f97316"];
+
+function Confetti() {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
+      <style>{`@keyframes kiosk-confetti { 0% { transform: translateY(-5vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(105vh) rotate(720deg); opacity: 0.6; } }`}</style>
+      {Array.from({ length: 36 }).map((_, i) => (
+        <span
+          key={i}
+          className="absolute block w-2.5 h-2.5 rounded-sm"
+          style={{
+            left: `${(i * 137) % 100}%`,
+            top: "-3vh",
+            backgroundColor: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+            animation: `kiosk-confetti ${2.2 + (i % 5) * 0.4}s linear ${(i % 7) * 0.15}s forwards`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MilestoneBanner({ milestone }: { milestone: number }) {
+  return (
+    <div className="px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/40 text-yellow-300 font-bold text-lg">
+      🎉 {milestone} classes — congratulations!
+    </div>
+  );
+}
 
 type MemberResult = {
   id: number;
@@ -70,6 +101,7 @@ export default function KioskPage() {
   useEffect(() => {
     fetch("/api/settings/public").then(r => r.json()).then(d => {
       if (d.gymName) setGymName(d.gymName + " Check-In");
+      if (d.waiverText) setWaiverText(d.waiverText);
     }).catch(() => {});
   }, []);
 
@@ -94,11 +126,15 @@ export default function KioskPage() {
   const [searching, setSearching] = useState(false);
   const [activeClasses, setActiveClasses] = useState<ActiveClass[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+  const [milestone, setMilestone] = useState<number | null>(null);
+  const [waiverText, setWaiverText] = useState("");
+  const [waiverFlow, setWaiverFlow] = useState<{ id: number; name: string } | null>(null);
   // QR scan result state
   const [scanResult, setScanResult] = useState<{
     state: "loading" | "success" | "error";
     name?: string;
     beltRank?: string | null;
+    milestone?: number | null;
   } | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +173,17 @@ export default function KioskPage() {
     inputRef.current?.blur();
   };
 
+  const finishSearchSuccess = useCallback((hitMilestone: number | null) => {
+    setMilestone(hitMilestone);
+    setCheckInState("success");
+    setTimeout(() => {
+      setSelected(null);
+      setCheckInState("idle");
+      setMilestone(null);
+      inputRef.current?.focus();
+    }, hitMilestone ? 5000 : 3000);
+  }, []);
+
   const handleCheckIn = async () => {
     if (!selected) return;
     setCheckInState("loading");
@@ -146,13 +193,12 @@ export default function KioskPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ memberId: selected.id, classId: selectedClassId }),
       });
-      if (res.ok) {
-        setCheckInState("success");
-        setTimeout(() => {
-          setSelected(null);
-          setCheckInState("idle");
-          inputRef.current?.focus();
-        }, 3000);
+      const data = await res.json();
+      if (res.ok && data.waiverRequired) {
+        setCheckInState("idle");
+        setWaiverFlow(data.member);
+      } else if (res.ok) {
+        finishSearchSuccess(data.milestone ?? null);
       } else {
         setCheckInState("error");
       }
@@ -171,17 +217,36 @@ export default function KioskPage() {
         body: JSON.stringify({ token, classId: selectedClassId }),
       });
       const data = await res.json();
-      if (res.ok) {
-        setScanResult({ state: "success", name: data.member?.name, beltRank: data.member?.beltRank });
-      } else {
-        setScanResult({ state: "error" });
+      if (res.ok && data.waiverRequired) {
+        setScanResult(null);
+        setWaiverFlow(data.member);
+        return;
       }
+      if (res.ok) {
+        const hitMilestone = data.milestone ?? null;
+        setScanResult({ state: "success", name: data.member?.name, beltRank: data.member?.beltRank, milestone: hitMilestone });
+        setTimeout(() => setScanResult(null), hitMilestone ? 5000 : 3000);
+        return;
+      }
+      setScanResult({ state: "error" });
     } catch {
       setScanResult({ state: "error" });
     }
     // Reset after 3 seconds and re-open scanner
     setTimeout(() => setScanResult(null), 3000);
   }, [selectedClassId]);
+
+  // Waiver signed → check-in completed inside WaiverScreen; route result to the active mode
+  const handleWaiverComplete = useCallback((data: { milestone?: number | null; member?: { name: string; beltRank: string | null } }) => {
+    setWaiverFlow(null);
+    if (mode === "search") {
+      finishSearchSuccess(data.milestone ?? null);
+    } else {
+      const hitMilestone = data.milestone ?? null;
+      setScanResult({ state: "success", name: data.member?.name, beltRank: data.member?.beltRank ?? null, milestone: hitMilestone });
+      setTimeout(() => setScanResult(null), hitMilestone ? 5000 : 3000);
+    }
+  }, [mode, finishSearchSuccess]);
 
   const handleReset = () => {
     setSelected(null);
@@ -232,8 +297,19 @@ export default function KioskPage() {
         </div>
       </div>
 
+      {/* ── WAIVER FLOW (either mode) ── */}
+      {waiverFlow && (
+        <WaiverScreen
+          member={waiverFlow}
+          classId={selectedClassId}
+          waiverText={waiverText}
+          onComplete={handleWaiverComplete}
+          onCancel={() => setWaiverFlow(null)}
+        />
+      )}
+
       {/* ── SEARCH MODE ── */}
-      {mode === "search" && (
+      {!waiverFlow && mode === "search" && (
         <>
           {!selected && (
             <div className="w-full max-w-xl relative">
@@ -352,12 +428,14 @@ export default function KioskPage() {
 
                   {checkInState === "success" ? (
                     <div className="mt-2 flex flex-col items-center gap-2">
+                      {milestone && <Confetti />}
                       <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
                         <svg className="w-9 h-9 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
                       <p className="text-green-400 font-semibold text-lg">Checked In!</p>
+                      {milestone && <MilestoneBanner milestone={milestone} />}
                       <p className="text-gray-500 text-sm">See you on the mats</p>
                     </div>
                   ) : checkInState === "error" ? (
@@ -390,7 +468,7 @@ export default function KioskPage() {
       )}
 
       {/* ── SCAN MODE ── */}
-      {mode === "scan" && (
+      {!waiverFlow && mode === "scan" && (
         <div className="flex flex-col items-center gap-6 w-full max-w-xs">
           {scanResult ? (
             <div className={`w-full rounded-3xl border p-8 flex flex-col items-center gap-4 text-center transition-all ${
@@ -404,6 +482,7 @@ export default function KioskPage() {
               )}
               {scanResult.state === "success" && (
                 <>
+                  {scanResult.milestone && <Confetti />}
                   <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
                     <svg className="w-9 h-9 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -416,6 +495,7 @@ export default function KioskPage() {
                     </>
                   )}
                   <p className="text-green-400 font-semibold text-lg">Checked In!</p>
+                  {scanResult.milestone && <MilestoneBanner milestone={scanResult.milestone} />}
                   <p className="text-gray-500 text-sm">See you on the mats</p>
                 </>
               )}

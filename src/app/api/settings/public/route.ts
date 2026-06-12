@@ -7,5 +7,6 @@ export async function GET() {
     gymName: settings.gymName,
     logoUrl: settings.logoUrl || null,
     stripePublishableKey: settings.stripePublishableKey || null,
+    waiverText: settings.waiverText || null,
   });
 }
