@@ -9,6 +9,12 @@ export const authConfig = {
       const role       = (auth?.user as { role?: string })?.role ?? "";
       const path       = nextUrl.pathname;
 
+      // Temporary passwords are good for exactly one login: force the change
+      // screen before any portal/admin page renders
+      if (isLoggedIn && (auth?.user as { mustChangePassword?: boolean })?.mustChangePassword) {
+        return Response.redirect(new URL("/change-password", nextUrl.origin));
+      }
+
       if (path.startsWith("/admin") || path.startsWith("/kiosk")) {
         if (!isLoggedIn) {
           const url = new URL("/login", nextUrl.origin);
@@ -63,6 +69,7 @@ export const authConfig = {
       if (user) {
         token.role     = (user as { role?: string }).role;
         token.memberId = (user as { memberId?: number }).memberId;
+        token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword;
       }
       return token;
     },
@@ -70,6 +77,7 @@ export const authConfig = {
       if (session.user) {
         (session.user as { role?: unknown }).role     = token.role;
         (session.user as { memberId?: unknown }).memberId = token.memberId;
+        (session.user as { mustChangePassword?: unknown }).mustChangePassword = token.mustChangePassword;
       }
       return session;
     },

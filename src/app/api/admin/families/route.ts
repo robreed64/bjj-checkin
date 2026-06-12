@@ -22,7 +22,10 @@ export async function POST(req: Request) {
 
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
-    data: { email, name: member.name, passwordHash, role: "parent", memberId: member.id },
+    data: {
+      email, name: member.name, passwordHash, role: "parent", memberId: member.id,
+      mustChangePassword: true, // staff-chosen password is good for one login
+    },
   });
 
   return NextResponse.json({ id: user.id, email: user.email, name: user.name, role: user.role }, { status: 201 });

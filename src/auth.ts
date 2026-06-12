@@ -25,7 +25,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const valid = await bcrypt.compare(String(credentials.password), user.passwordHash);
           if (!valid) return null;
 
-          return { id: String(user.id), email: user.email, name: user.name, role: user.role, memberId: user.memberId ?? undefined };
+          return {
+            id: String(user.id),
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            memberId: user.memberId ?? undefined,
+            mustChangePassword: user.mustChangePassword,
+          };
         } catch (err) {
           console.error("[auth] authorize error:", err);
           return null;

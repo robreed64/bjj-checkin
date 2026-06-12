@@ -121,6 +121,7 @@ export async function POST(req: NextRequest) {
             passwordHash: await bcrypt.hash(tempPassword, 10),
             role:         "member",
             memberId:     member.id,
+            mustChangePassword: true, // emailed temp password is good for one login
           },
         });
         await sendEmail(

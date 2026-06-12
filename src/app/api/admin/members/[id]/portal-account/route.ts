@@ -6,6 +6,9 @@ import { requireAuth } from "@/lib/require-auth";
 type Params = Promise<{ id: string }>;
 
 export async function POST(req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("members");
+  if (error) return error;
+
   const { id } = await params;
   const memberId = parseInt(id, 10);
   if (isNaN(memberId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
@@ -37,6 +40,7 @@ export async function POST(req: Request, { params }: { params: Params }) {
       passwordHash,
       role:         "member",
       memberId,
+      mustChangePassword: true, // staff-chosen password is good for one login
     },
   });
 
@@ -60,11 +64,15 @@ export async function PATCH(req: Request, { params }: { params: Params }) {
   if (!user) return NextResponse.json({ error: "No portal account found" }, { status: 404 });
 
   const passwordHash = await bcrypt.hash(password, 12);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  // Staff resets are temporary too — the member picks their own on next login
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: true } });
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(_req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("members");
+  if (error) return error;
+
   const { id } = await params;
   const memberId = parseInt(id, 10);
   if (isNaN(memberId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });

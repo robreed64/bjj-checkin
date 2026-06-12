@@ -46,6 +46,9 @@ model User {
   email        String   @unique
   name         String
   passwordHash String   @map("password_hash")
+  // Set when an account is created/reset with a staff-chosen or temporary
+  // password; forces a password change on first login
+  mustChangePassword Boolean @default(false) @map("must_change_password")
   role         String   @default("staff") // 'admin', 'manager', 'front_desk', 'staff', 'member', 'parent'
   memberId     Int?     @unique @map("member_id")
   member       Member?  @relation(fields: [memberId], references: [id])
