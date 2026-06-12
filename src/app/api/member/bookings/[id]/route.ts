@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/require-member";
+import { promoteWaitlist } from "@/lib/waitlist";
 
 type Params = Promise<{ id: string }>;
 
@@ -18,5 +19,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: Params }) 
   if (booking.memberId !== memberId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await prisma.booking.update({ where: { id: bookingId }, data: { status: "canceled" } });
+
+  // A canceled seat may free a spot for the waitlist
+  if (booking.status === "booked" || booking.status === "attended") {
+    await promoteWaitlist(booking.classId).catch(() => {});
+  }
+
   return new NextResponse(null, { status: 204 });
 }

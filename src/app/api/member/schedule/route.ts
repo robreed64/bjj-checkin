@@ -20,7 +20,7 @@ export async function GET() {
   });
 
   const result = classes.map((cls) => {
-    const active = cls.bookings.find((b) => b.status === "booked" || b.status === "attended");
+    const active = cls.bookings.find((b) => b.status === "booked" || b.status === "attended" || b.status === "waitlisted");
     return {
       id: cls.id,
       name: cls.name,

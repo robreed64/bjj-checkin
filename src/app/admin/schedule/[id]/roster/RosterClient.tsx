@@ -24,10 +24,11 @@ const BELT_DOT: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, { pill: string; label: string }> = {
-  booked:   { pill: "bg-blue-500/15 text-blue-300",  label: "Booked" },
-  attended: { pill: "bg-green-500/15 text-green-400", label: "Attended" },
-  no_show:  { pill: "bg-red-500/15 text-red-400",    label: "No-show" },
-  canceled: { pill: "bg-gray-700/50 text-gray-500",  label: "Canceled" },
+  booked:     { pill: "bg-blue-500/15 text-blue-300",   label: "Booked" },
+  attended:   { pill: "bg-green-500/15 text-green-400", label: "Attended" },
+  no_show:    { pill: "bg-red-500/15 text-red-400",     label: "No-show" },
+  canceled:   { pill: "bg-gray-700/50 text-gray-500",   label: "Canceled" },
+  waitlisted: { pill: "bg-amber-500/15 text-amber-300", label: "Waitlisted" },
 };
 
 function Initials({ name }: { name: string }) {
@@ -129,8 +130,9 @@ export default function RosterClient({ classId, bookings: initialBookings, atten
     setBookings((prev) => prev.filter((b) => b.id !== bookingId));
   };
 
-  const attended = bookings.filter((b) => b.status === "attended").length + walkInIds.size;
-  const total    = bookings.filter((b) => b.status !== "canceled").length;
+  const attended   = bookings.filter((b) => b.status === "attended").length + walkInIds.size;
+  const waitlisted = bookings.filter((b) => b.status === "waitlisted");
+  const total      = bookings.filter((b) => b.status !== "canceled" && b.status !== "waitlisted").length;
 
   return (
     <div className="space-y-6">
@@ -139,6 +141,7 @@ export default function RosterClient({ classId, bookings: initialBookings, atten
         <Stat label="Enrolled"  value={total} />
         <Stat label="Attended"  value={attended} color="text-green-400" />
         <Stat label="No-shows"  value={bookings.filter((b) => b.status === "no_show").length} color="text-red-400" />
+        {waitlisted.length > 0 && <Stat label="Waitlist" value={waitlisted.length} color="text-amber-300" />}
         {capacity && <Stat label="Capacity" value={capacity} />}
       </div>
 
@@ -201,7 +204,7 @@ export default function RosterClient({ classId, bookings: initialBookings, atten
               <tr><td colSpan={3} className="px-4 py-10 text-center text-gray-600">No one on the roster yet</td></tr>
             )}
 
-            {bookings.map((b) => {
+            {bookings.filter((b) => b.status !== "waitlisted").map((b) => {
               const s = STATUS_STYLES[b.status] ?? STATUS_STYLES.booked;
               return (
                 <tr key={b.id} className="hover:bg-gray-900/40 transition">
@@ -264,6 +267,41 @@ export default function RosterClient({ classId, bookings: initialBookings, atten
           </tbody>
         </table>
       </div>
+
+      {/* Waitlist */}
+      {waitlisted.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-amber-300 mb-2">Waitlist ({waitlisted.length})</h3>
+          <div className="rounded-xl border border-amber-800/40 overflow-hidden">
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-gray-800">
+                {[...waitlisted].sort((a, b) => a.id - b.id).map((b, i) => (
+                  <tr key={b.id} className="hover:bg-gray-900/40 transition">
+                    <td className="px-4 py-3 w-8 text-amber-300/70 text-xs font-bold">#{i + 1}</td>
+                    <td className="px-4 py-3">
+                      <Link href={`/admin/members/${b.member.id}`} className="hover:opacity-80 transition">
+                        <Avatar member={b.member} />
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => updateStatus(b.id, "booked")}
+                          className="px-2.5 py-1 rounded-lg bg-amber-700/40 hover:bg-amber-700 text-amber-200 text-xs font-medium transition">
+                          Promote
+                        </button>
+                        <button onClick={() => removeBooking(b.id)}
+                          className="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-500 hover:text-red-400 text-xs transition">
+                          ✕
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

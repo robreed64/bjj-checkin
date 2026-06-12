@@ -65,10 +65,13 @@ export default function SchedulePage() {
     });
     if (res.ok) {
       const newBooking = await res.json();
+      const status = newBooking.waitlisted ? "waitlisted" : "booked";
       setClasses(prev =>
-        prev.map(c => c.id === classId ? { ...c, booking: { id: newBooking.id, status: "booked" } } : c)
+        prev.map(c => c.id === classId ? { ...c, booking: { id: newBooking.id, status } } : c)
       );
-      showToast("Class booked!");
+      showToast(newBooking.waitlisted
+        ? `Class full — you're #${newBooking.position} on the waitlist`
+        : "Class booked!");
     } else {
       const err = await res.json().catch(() => ({}));
       showToast(err.error ?? "Could not book class");
@@ -143,7 +146,11 @@ export default function SchedulePage() {
                     <div className="flex items-center gap-3">
                       {isBooked ? (
                         <>
-                          <span className="text-xs text-green-400 font-medium">Booked ✓</span>
+                          {cls.booking!.status === "waitlisted" ? (
+                            <span className="text-xs text-amber-300 font-medium">Waitlisted</span>
+                          ) : (
+                            <span className="text-xs text-green-400 font-medium">Booked ✓</span>
+                          )}
                           <button
                             onClick={() => cancel(cls.id, cls.booking!.id)}
                             disabled={isBusy}
