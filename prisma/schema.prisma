@@ -26,6 +26,7 @@ model Member {
   checkinToken     String?   @unique @map("checkin_token")
   beltStripes      Int       @default(0) @map("belt_stripes")
   waiverSignedAt   DateTime? @map("waiver_signed_at")
+  trialStartedAt   DateTime? @map("trial_started_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
@@ -96,6 +97,7 @@ model Subscription {
   startDate            DateTime  @map("start_date") @db.Date
   endDate              DateTime? @map("end_date") @db.Date
   familyDiscountApplied Boolean  @default(false) @map("family_discount_applied")
+  canceledAt           DateTime? @map("canceled_at")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
@@ -140,7 +142,8 @@ model Booking {
   member    Member   @relation(fields: [memberId], references: [id])
   classId   Int      @map("class_id")
   class     Class    @relation(fields: [classId], references: [id])
-  status    String   // 'booked','attended','no_show','canceled'
+  status         String    // 'booked','attended','no_show','canceled','waitlisted'
+  reminderSentAt DateTime? @map("reminder_sent_at")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -312,6 +315,7 @@ model GymSettings {
   posCategories        Json     @default("[\"drinks\",\"gear\",\"events\"]") @map("pos_categories")
   familyDiscountEnabled  Boolean @default(false) @map("family_discount_enabled")
   familyDiscountPercent  Int     @default(10) @map("family_discount_percent")
+  trialLengthDays        Int     @default(14) @map("trial_length_days")
   vapidPublicKey         String? @map("vapid_public_key")
   vapidPrivateKey        String? @map("vapid_private_key")
   updatedAt            DateTime @updatedAt @map("updated_at")
