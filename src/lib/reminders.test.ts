@@ -3,6 +3,9 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/prisma", () => import("@/test/prisma-mock"));
 vi.mock("@/lib/email", () => ({ sendEmail: vi.fn() }));
 vi.mock("@/lib/web-push", () => ({ sendPushToUser: vi.fn() }));
+vi.mock("@/lib/gym-settings", () => ({
+  getGymSettings: vi.fn().mockResolvedValue({ timezone: "America/New_York" }),
+}));
 
 import { prisma } from "@/test/prisma-mock";
 import { sendEmail } from "@/lib/email";
@@ -29,8 +32,12 @@ describe("sendClassReminders", () => {
 
     const result = await sendClassReminders(now);
 
-    expect(result).toEqual({ sent: 1, failed: 0 });
+    expect(result).toEqual({ sent: 1, skipped: 0, failed: 0 });
     expect(sendPushToUser).toHaveBeenCalledWith(30, expect.objectContaining({ title: "Class reminder" }));
+    // 18:00 UTC = 2:00 PM Eastern — message must use gym-local time
+    expect(sendPushToUser).toHaveBeenCalledWith(30, expect.objectContaining({
+      body: expect.stringContaining("2:00 PM"),
+    }));
     expect(sendEmail).not.toHaveBeenCalled();
     expect(prisma.booking.update).toHaveBeenCalledWith({
       where: { id: 1 },
@@ -71,8 +78,22 @@ describe("sendClassReminders", () => {
 
     const result = await sendClassReminders(now);
 
-    expect(result).toEqual({ sent: 0, failed: 1 });
+    expect(result).toEqual({ sent: 0, skipped: 0, failed: 1 });
     expect(prisma.booking.update).toHaveBeenCalledOnce();
+  });
+
+  it("counts unreachable members (no account, no email) as skipped, not sent", async () => {
+    prisma.booking.findMany.mockResolvedValue([
+      booking({ member: { id: 5, name: "Jane", email: null, user: null } }),
+    ] as never);
+    prisma.booking.update.mockResolvedValue({} as never);
+
+    const result = await sendClassReminders(now);
+
+    expect(result).toEqual({ sent: 0, skipped: 1, failed: 0 });
+    expect(sendPushToUser).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(prisma.booking.update).toHaveBeenCalledOnce(); // still stamped
   });
 
   it("queries only unsent booked bookings inside the window", async () => {

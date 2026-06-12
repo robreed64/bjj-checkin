@@ -159,6 +159,8 @@ model Attendance {
   timestamp DateTime @default(now())
   source    String   // 'kiosk','staff','app'
 
+  // Milestone counts and inactivity scans hit this table on hot paths
+  @@index([memberId, timestamp])
   @@map("attendance")
 }
 

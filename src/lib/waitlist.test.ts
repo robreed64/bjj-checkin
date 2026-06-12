@@ -3,6 +3,9 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/prisma", () => import("@/test/prisma-mock"));
 vi.mock("@/lib/email", () => ({ sendEmail: vi.fn() }));
 vi.mock("@/lib/web-push", () => ({ sendPushToUser: vi.fn() }));
+vi.mock("@/lib/gym-settings", () => ({
+  getGymSettings: vi.fn().mockResolvedValue({ timezone: "America/New_York" }),
+}));
 
 import { prisma } from "@/test/prisma-mock";
 import { sendEmail } from "@/lib/email";

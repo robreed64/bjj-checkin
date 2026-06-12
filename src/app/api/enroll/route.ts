@@ -48,13 +48,25 @@ export async function POST(req: NextRequest) {
         } catch { /* enroll without discount */ }
       }
 
-      const sub = await stripe.subscriptions.create({
-        customer:         resolvedCustomerId,
-        items:            [{ price: plan.stripePriceId }],
-        ...(promotionCodeId && { discounts: [{ promotion_code: promotionCodeId }] }),
-        payment_behavior: "default_incomplete",
-        expand:           ["latest_invoice.payment_intent"],
-      });
+      const createSubscription = (withPromo: boolean) =>
+        stripe.subscriptions.create({
+          customer:         resolvedCustomerId!,
+          items:            [{ price: plan.stripePriceId! }],
+          ...(withPromo && promotionCodeId && { discounts: [{ promotion_code: promotionCodeId }] }),
+          payment_behavior: "default_incomplete",
+          expand:           ["latest_invoice.payment_intent"],
+        });
+
+      let sub;
+      try {
+        sub = await createSubscription(true);
+      } catch (err) {
+        // A code can list as active yet be ineligible at attach time (first-time-only,
+        // currency/product restrictions) — enroll without the discount rather than 500
+        if (!promotionCodeId) throw err;
+        console.warn(`Promo code rejected at subscribe time, enrolling without it:`, err);
+        sub = await createSubscription(false);
+      }
 
       stripeSubId  = sub.id;
       memberStatus = sub.status === "active" || sub.status === "trialing" ? "active" : "past_due";

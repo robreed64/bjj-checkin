@@ -193,7 +193,8 @@ export default function KioskPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ memberId: selected.id, classId: selectedClassId }),
       });
-      const data = await res.json();
+      // A 2xx with an unparseable body still means the check-in was recorded
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.waiverRequired) {
         setCheckInState("idle");
         setWaiverFlow(data.member);
@@ -216,7 +217,8 @@ export default function KioskPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, classId: selectedClassId }),
       });
-      const data = await res.json();
+      // A 2xx with an unparseable body still means the check-in was recorded
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.waiverRequired) {
         setScanResult(null);
         setWaiverFlow(data.member);

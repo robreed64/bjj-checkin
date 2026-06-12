@@ -115,8 +115,16 @@ export default function PosSetupClient({ categories: initial, items: initial_ite
                 <>
                   <span className="flex-1 text-sm text-gray-300 capitalize">{cat.replace(/_/g, " ")}</span>
                   <span className="text-xs text-gray-600">{items.filter(i => i.category === cat).length} items</span>
-                  <button onClick={() => { setRenamingCat(cat); setRenameVal(cat); }} className="text-xs text-gray-500 hover:text-gray-300">Rename</button>
-                  <button onClick={() => removeCategory(cat)} className="text-xs text-red-500 hover:text-red-300">Delete</button>
+                  {cat === "day_pass" ? (
+                    // Walk-in day-pass behavior (POS check-in, trial member creation)
+                    // keys off this slug — renaming it would silently disable the feature
+                    <span className="text-xs text-gray-600">built-in</span>
+                  ) : (
+                    <>
+                      <button onClick={() => { setRenamingCat(cat); setRenameVal(cat); }} className="text-xs text-gray-500 hover:text-gray-300">Rename</button>
+                      <button onClick={() => removeCategory(cat)} className="text-xs text-red-500 hover:text-red-300">Delete</button>
+                    </>
+                  )}
                 </>
               )}
             </div>

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/web-push";
+import { getGymSettings } from "@/lib/gym-settings";
 
 // Bookings that occupy a seat
 export function countActiveBookings(classId: number) {
@@ -33,8 +34,10 @@ export async function promoteWaitlist(classId: number) {
     data: { status: "booked" },
   });
 
+  const settings = await getGymSettings();
   const when = cls.startTime.toLocaleString("en-US", {
     weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    timeZone: settings.timezone,
   });
   const body = `A spot opened up — you're now booked for ${cls.name} (${when}).`;
   try {

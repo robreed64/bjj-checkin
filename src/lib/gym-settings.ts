@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "./prisma";
 
 const DEFAULT_WAIVER = `PARTICIPATION AGREEMENT AND RELEASE OF LIABILITY
@@ -20,13 +21,18 @@ By enrolling at this academy, you ("Participant") acknowledge and agree to the f
 
 By signing below, you confirm that you have read, understood, and agree to all terms of this agreement.`;
 
-export async function getGymSettings() {
-  return prisma.gymSettings.upsert({
-    where: { id: 1 },
-    update: {},
-    create: { id: 1, waiverText: DEFAULT_WAIVER },
-  });
-}
+// Read-only in steady state (the row exists after first boot); created on first
+// access. cache() dedupes the query within a request so layout + page share one.
+export const getGymSettings = cache(async () => {
+  const existing = await prisma.gymSettings.findUnique({ where: { id: 1 } });
+  if (existing) return existing;
+  try {
+    return await prisma.gymSettings.create({ data: { id: 1, waiverText: DEFAULT_WAIVER } });
+  } catch {
+    // Lost a concurrent first-boot race — the row exists now
+    return prisma.gymSettings.findUniqueOrThrow({ where: { id: 1 } });
+  }
+});
 
 export function formatCurrency(cents: number, symbol: string, locale: string): string {
   return symbol + (cents / 100).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });

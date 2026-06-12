@@ -59,9 +59,15 @@ export default function WaiverScreen({ member, classId, waiverText, onComplete, 
           </p>
         </div>
 
-        <div className="max-h-64 overflow-y-auto rounded-xl bg-gray-800 border border-gray-700 p-4 text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">
-          {waiverText}
-        </div>
+        {waiverText.trim() ? (
+          <div className="max-h-64 overflow-y-auto rounded-xl bg-gray-800 border border-gray-700 p-4 text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">
+            {waiverText}
+          </div>
+        ) : (
+          <div className="rounded-xl bg-amber-900/20 border border-amber-700/60 p-4 text-sm text-amber-300">
+            The waiver text couldn&apos;t be loaded. Please see the front desk to sign a paper waiver.
+          </div>
+        )}
 
         <label className="flex items-start gap-3 cursor-pointer">
           <input
@@ -91,7 +97,7 @@ export default function WaiverScreen({ member, classId, waiverText, onComplete, 
           </button>
           <button
             onClick={submit}
-            disabled={!signed || !agreed || submitting}
+            disabled={!signed || !agreed || submitting || !waiverText.trim()}
             className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold transition"
           >
             {submitting ? "Signing…" : "Sign & Check In"}

@@ -1,17 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/web-push";
+import { getGymSettings } from "@/lib/gym-settings";
 
 // Daily cron on Hobby plan → 24h "morning-of" window. On a Pro plan, switch the
 // cron to hourly and call with windowHours = 2 for "2 hours before" reminders.
 export const REMINDER_WINDOW_HOURS = 24;
 
-function fmtTime(d: Date) {
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+function fmtTime(d: Date, timeZone: string) {
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
 }
 
 export async function sendClassReminders(now = new Date(), windowHours = REMINDER_WINDOW_HOURS) {
   const windowEnd = new Date(now.getTime() + windowHours * 60 * 60 * 1000);
+  const settings = await getGymSettings();
 
   const bookings = await prisma.booking.findMany({
     where: {
@@ -26,11 +28,12 @@ export async function sendClassReminders(now = new Date(), windowHours = REMINDE
   });
 
   let sent = 0;
+  let skipped = 0;
   let failed = 0;
 
   for (const booking of bookings) {
     const title = "Class reminder";
-    const body  = `You're booked for ${booking.class.name} at ${fmtTime(booking.class.startTime)}. See you on the mats!`;
+    const body  = `You're booked for ${booking.class.name} at ${fmtTime(booking.class.startTime, settings.timezone)}. See you on the mats!`;
 
     try {
       let delivered = 0;
@@ -39,8 +42,10 @@ export async function sendClassReminders(now = new Date(), windowHours = REMINDE
       }
       if (delivered === 0 && booking.member.email) {
         await sendEmail(booking.member.email, `Reminder: ${booking.class.name}`, `<p>${body}</p>`);
+        delivered = 1;
       }
-      sent++;
+      if (delivered > 0) sent++;
+      else skipped++; // unreachable: no push subscription and no email on file
     } catch (err) {
       failed++;
       console.error(`Reminder delivery failed for booking ${booking.id}:`, err);
@@ -54,5 +59,5 @@ export async function sendClassReminders(now = new Date(), windowHours = REMINDE
     });
   }
 
-  return { sent, failed };
+  return { sent, skipped, failed };
 }
