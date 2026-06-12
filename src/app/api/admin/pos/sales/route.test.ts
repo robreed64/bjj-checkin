@@ -18,7 +18,9 @@ function saleRequest(body: object) {
 }
 
 // $5.00 drink at 10% tax → line total 550
-const drink = { id: 1, priceCents: 500, taxRate: "10", stock: 10 } as never;
+const drink = { id: 1, priceCents: 500, taxRate: "10", stock: 10, category: "drinks" } as never;
+// $20 day pass, no tax
+const dayPass = { id: 2, priceCents: 2000, taxRate: "0", stock: null, category: "day_pass" } as never;
 
 function stubItemsAndTransaction() {
   prisma.item.findMany.mockResolvedValue([drink]);
@@ -168,5 +170,88 @@ describe("POST /api/admin/pos/sales — card on file", () => {
     }));
 
     expect(res.status).toBe(503);
+  });
+});
+
+describe("POST /api/admin/pos/sales — day passes", () => {
+  it("creates a trial member and checks in a walk-in", async () => {
+    prisma.item.findMany.mockResolvedValue([dayPass]);
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (tx: typeof prisma) => unknown) => fn(prisma)
+    );
+    prisma.member.create.mockResolvedValue({ id: 42 } as never);
+    prisma.sale.create.mockResolvedValue({ id: 12, totalCents: 2000 } as never);
+    prisma.item.updateMany.mockResolvedValue({ count: 0 } as never);
+    prisma.attendance.create.mockResolvedValue({ id: 1 } as never);
+
+    const res = await POST(saleRequest({
+      memberId: null,
+      paymentMethodType: "cash",
+      lineItems: [{ itemId: 2, quantity: 1 }],
+      walkIn: { name: "Visitor Vic", email: "vic@x.com" },
+    }));
+    const data = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(data.checkedIn).toBe(true);
+    expect(prisma.member.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ name: "Visitor Vic", status: "trial", trialStartedAt: expect.any(Date) }),
+    });
+    expect(prisma.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ memberId: 42 }),
+    }));
+    expect(prisma.attendance.create).toHaveBeenCalledWith({
+      data: { memberId: 42, classId: null, source: "staff" },
+    });
+  });
+
+  it("checks in an existing member buying a day pass without creating a new one", async () => {
+    prisma.item.findMany.mockResolvedValue([dayPass]);
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (tx: typeof prisma) => unknown) => fn(prisma)
+    );
+    prisma.sale.create.mockResolvedValue({ id: 13, totalCents: 2000 } as never);
+    prisma.item.updateMany.mockResolvedValue({ count: 0 } as never);
+    prisma.attendance.create.mockResolvedValue({ id: 2 } as never);
+
+    const res = await POST(saleRequest({
+      memberId: 5,
+      paymentMethodType: "cash",
+      lineItems: [{ itemId: 2, quantity: 1 }],
+    }));
+
+    expect(res.status).toBe(201);
+    expect(prisma.member.create).not.toHaveBeenCalled();
+    expect(prisma.attendance.create).toHaveBeenCalledWith({
+      data: { memberId: 5, classId: null, source: "staff" },
+    });
+  });
+
+  it("400s when a day pass has no member and no walk-in name", async () => {
+    prisma.item.findMany.mockResolvedValue([dayPass]);
+
+    const res = await POST(saleRequest({
+      memberId: null,
+      paymentMethodType: "cash",
+      lineItems: [{ itemId: 2, quantity: 1 }],
+    }));
+
+    expect(res.status).toBe(400);
+    expect(prisma.sale.create).not.toHaveBeenCalled();
+  });
+
+  it("does not check in for non-day-pass sales", async () => {
+    stubItemsAndTransaction();
+
+    const res = await POST(saleRequest({
+      memberId: 5,
+      paymentMethodType: "cash",
+      lineItems: [{ itemId: 1, quantity: 1 }],
+    }));
+    const data = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(data.checkedIn).toBe(false);
+    expect(prisma.attendance.create).not.toHaveBeenCalled();
   });
 });

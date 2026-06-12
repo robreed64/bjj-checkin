@@ -37,10 +37,12 @@ export async function POST(req: Request) {
     memberId,
     paymentMethodType,
     lineItems,
+    walkIn,
   }: {
     memberId:          number | null;
     paymentMethodType: string;
     lineItems:         { itemId: number; quantity: number }[];
+    walkIn?:           { name: string; email?: string; phone?: string };
   } = await req.json();
 
   if (!lineItems?.length) {
@@ -54,15 +56,22 @@ export async function POST(req: Request) {
   const itemById = new Map(items.map((i) => [i.id, i]));
 
   let totalCents = 0;
+  let hasDayPass = false;
   const saleLines: { itemId: number; quantity: number; unitPriceCents: number }[] = [];
   for (const li of lineItems) {
     const item = itemById.get(li.itemId);
     if (!item || li.quantity < 1) {
       return NextResponse.json({ error: "Invalid item in cart" }, { status: 400 });
     }
+    if (item.category === "day_pass") hasDayPass = true;
     const lineSubtotal = item.priceCents * li.quantity;
     totalCents += lineSubtotal + Math.round(lineSubtotal * Number(item.taxRate) / 100);
     saleLines.push({ itemId: item.id, quantity: li.quantity, unitPriceCents: item.priceCents });
+  }
+
+  // A day pass must be tied to a person (so they're checked in and enter the trial funnel)
+  if (hasDayPass && !memberId && !walkIn?.name?.trim()) {
+    return NextResponse.json({ error: "Day pass requires a member or a walk-in name" }, { status: 400 });
   }
 
   // Charge the saved card before recording anything; declined cards never produce a Sale
@@ -121,9 +130,25 @@ export async function POST(req: Request) {
 
   try {
     const sale = await prisma.$transaction(async (tx) => {
+      let saleMemberId = memberId ?? null;
+
+      // Day-pass walk-in: create a trial member so they're trackable in the funnel
+      if (hasDayPass && !saleMemberId && walkIn?.name?.trim()) {
+        const created = await tx.member.create({
+          data: {
+            name:           walkIn.name.trim(),
+            email:          walkIn.email?.trim() || null,
+            phone:          walkIn.phone?.trim() || null,
+            status:         "trial",
+            trialStartedAt: new Date(),
+          },
+        });
+        saleMemberId = created.id;
+      }
+
       const created = await tx.sale.create({
         data: {
-          memberId: memberId ?? null,
+          memberId: saleMemberId,
           totalCents,
           paymentMethodType,
           stripePaymentIntentId,
@@ -142,10 +167,18 @@ export async function POST(req: Request) {
           data:  { stock: { decrement: li.quantity } },
         });
       }
+
+      // Day pass includes immediate check-in
+      if (hasDayPass && saleMemberId) {
+        await tx.attendance.create({
+          data: { memberId: saleMemberId, classId: null, source: "staff" },
+        });
+      }
+
       return created;
     });
 
-    return NextResponse.json(sale, { status: 201 });
+    return NextResponse.json({ ...sale, checkedIn: hasDayPass }, { status: 201 });
   } catch (err) {
     // Card was already charged; surface the PI id so the sale can be reconciled in Stripe
     console.error(`POS sale record failed (paymentIntent: ${stripePaymentIntentId ?? "none"}):`, err);

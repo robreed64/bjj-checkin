@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
-const SignaturePad  = dynamic(() => import("./SignaturePad"),  { ssr: false });
+const SignaturePad  = dynamic(() => import("@/components/SignaturePad"),  { ssr: false });
 const PaymentStep  = dynamic(() => import("./PaymentStep"),   { ssr: false });
 
 type Plan = {
@@ -27,6 +27,7 @@ type FormData = {
   planId: number | null;
   stripeCustomerId: string | null;
   paymentMethodId: string | null;
+  promoCode: string;
 };
 
 const STEPS = ["Personal Info", "Waiver", "Choose Plan", "Payment", "Confirm"];
@@ -65,8 +66,36 @@ export default function EnrollPage() {
   const [form, setForm] = useState<FormData>({
     name: "", email: "", phone: "", dateOfBirth: "",
     ageGroup: "adult", trainingType: "", planId: null,
-    stripeCustomerId: null, paymentMethodId: null,
+    stripeCustomerId: null, paymentMethodId: null, promoCode: "",
   });
+
+  type PromoState = { status: "idle" | "checking" | "valid" | "invalid"; label?: string };
+  const [promo, setPromo] = useState<PromoState>({ status: "idle" });
+
+  const applyPromo = async () => {
+    if (!form.promoCode.trim()) return;
+    setPromo({ status: "checking" });
+    try {
+      const res = await fetch("/api/enroll/validate-promo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: form.promoCode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.valid) {
+        const off = data.coupon.percentOff != null
+          ? `${data.coupon.percentOff}% off`
+          : data.coupon.amountOff != null
+          ? `$${(data.coupon.amountOff / 100).toFixed(2)} off`
+          : "discount";
+        setPromo({ status: "valid", label: `${data.coupon.name} — ${off}` });
+      } else {
+        setPromo({ status: "invalid" });
+      }
+    } catch {
+      setPromo({ status: "invalid" });
+    }
+  };
 
   useEffect(() => {
     fetch("/api/plans").then((r) => r.json()).then(setPlans);
@@ -307,6 +336,35 @@ export default function EnrollPage() {
                   );
                 })}
               </div>
+
+              {form.planId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Promo code (optional)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={form.promoCode}
+                      onChange={(e) => { set("promoCode", e.target.value.toUpperCase()); setPromo({ status: "idle" }); }}
+                      placeholder="e.g. WELCOME10"
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyPromo}
+                      disabled={!form.promoCode.trim() || promo.status === "checking"}
+                      className="px-4 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-white text-sm font-medium transition"
+                    >
+                      {promo.status === "checking" ? "…" : "Apply"}
+                    </button>
+                  </div>
+                  {promo.status === "valid" && (
+                    <p className="mt-1.5 text-xs text-green-400">✓ {promo.label}</p>
+                  )}
+                  {promo.status === "invalid" && (
+                    <p className="mt-1.5 text-xs text-red-400">Code not valid or expired</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -342,6 +400,9 @@ export default function EnrollPage() {
                 <Row label="Training" value={form.trainingType || "Not specified"} />
                 <Row label="Waiver"   value="Signed ✓" valueClass="text-green-400" />
                 <Row label="Plan"     value={selectedPlan ? `${selectedPlan.name} — $${(selectedPlan.priceCents / 100).toFixed(0)}/mo` : "Trial (no plan)"} />
+                {selectedPlan && promo.status === "valid" && (
+                  <Row label="Promo"  value={promo.label ?? form.promoCode} valueClass="text-green-400" />
+                )}
                 <Row label="Payment"  value={form.paymentMethodId ? "Card saved ✓" : "Collect later"} valueClass={form.paymentMethodId ? "text-green-400" : "text-yellow-400"} />
               </div>
               {!selectedPlan && (

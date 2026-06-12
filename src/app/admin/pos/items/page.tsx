@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { getGymSettings } from "@/lib/gym-settings";
 import ItemsManager from "./ItemsManager";
 
 export default async function ItemsPage() {
-  const items = await prisma.item.findMany({
-    orderBy: [{ category: "asc" }, { name: "asc" }],
-  });
+  const [items, settings] = await Promise.all([
+    prisma.item.findMany({ orderBy: [{ category: "asc" }, { name: "asc" }] }),
+    getGymSettings(),
+  ]);
+  const categories = (settings.posCategories as string[] | null) ?? ["drinks", "gear", "events"];
+  if (!categories.includes("day_pass")) categories.push("day_pass");
 
   return (
     <div className="p-8 max-w-5xl">
@@ -17,7 +21,7 @@ export default async function ItemsPage() {
           <h1 className="text-2xl font-bold text-white mt-1">Item Management</h1>
         </div>
       </div>
-      <ItemsManager initialItems={items.map((i) => ({
+      <ItemsManager categories={categories} initialItems={items.map((i) => ({
         id:         i.id,
         name:       i.name,
         priceCents: i.priceCents,

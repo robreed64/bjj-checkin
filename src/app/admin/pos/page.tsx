@@ -9,6 +9,7 @@ export default async function POSPage() {
     getGymSettings(),
   ]);
   const categories = (settings.posCategories as string[] | null) ?? ["drinks", "gear", "events"];
+  if (!categories.includes("day_pass")) categories.push("day_pass");
 
   return (
     <div className="flex flex-col h-screen">

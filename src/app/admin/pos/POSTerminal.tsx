@@ -45,7 +45,9 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
   const [payMethod, setPayMethod] = useState<"cash" | "card_on_file">("cash");
   const [processing, setProcessing] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [receipt, setReceipt]       = useState<{ total: number; id: number } | null>(null);
+  const [walkInName, setWalkInName]   = useState("");
+  const [walkInEmail, setWalkInEmail] = useState("");
+  const [receipt, setReceipt]       = useState<{ total: number; id: number; checkedIn?: boolean } | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const visibleItems = items.filter((i) => i.category === tab);
@@ -79,6 +81,9 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
   const subtotal = cart.reduce((s, l) => s + l.item.priceCents * l.quantity, 0);
   const tax      = cart.reduce((s, l) => s + Math.round(l.item.priceCents * l.quantity * Number(l.item.taxRate) / 100), 0);
   const total    = subtotal + tax;
+  const hasDayPass    = cart.some((l) => l.item.category === "day_pass");
+  const needsWalkIn   = hasDayPass && !selectedMember;
+  const walkInMissing = needsWalkIn && !walkInName.trim();
 
   const checkout = async () => {
     if (cart.length === 0) return;
@@ -95,14 +100,19 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
             itemId:   l.item.id,
             quantity: l.quantity,
           })),
+          ...(needsWalkIn && walkInName.trim() && {
+            walkIn: { name: walkInName, email: walkInEmail || undefined },
+          }),
         }),
       });
       if (res.ok) {
         const sale = await res.json();
-        setReceipt({ total: sale.totalCents, id: sale.id });
+        setReceipt({ total: sale.totalCents, id: sale.id, checkedIn: sale.checkedIn });
         setCart([]);
         setSelectedMember(null);
         setMemberQ("");
+        setWalkInName("");
+        setWalkInEmail("");
       } else {
         const data = await res.json().catch(() => null);
         setCheckoutError(data?.error ?? "Checkout failed — try again");
@@ -120,6 +130,9 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
         <div>
           <p className="text-2xl font-bold text-green-400">{fmt(receipt.total)} charged</p>
           <p className="text-gray-500 text-sm mt-1">Sale #{receipt.id}</p>
+          {receipt.checkedIn && (
+            <p className="text-green-400 text-sm mt-2 font-medium">✓ Checked in — remind them to sign the waiver at the kiosk</p>
+          )}
         </div>
         <button
           onClick={() => setReceipt(null)}
@@ -258,6 +271,27 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
             )}
           </div>
 
+          {/* Walk-in details for day passes */}
+          {needsWalkIn && (
+            <div className="space-y-2">
+              <p className="text-xs text-amber-300 font-medium">Day pass — who&apos;s it for?</p>
+              <input
+                type="text"
+                placeholder="Walk-in name (required)"
+                value={walkInName}
+                onChange={(e) => setWalkInName(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 text-xs focus:outline-none focus:border-amber-500 transition"
+              />
+              <input
+                type="text" inputMode="email"
+                placeholder="Email (optional)"
+                value={walkInEmail}
+                onChange={(e) => setWalkInEmail(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 text-xs focus:outline-none focus:border-amber-500 transition"
+              />
+            </div>
+          )}
+
           {/* Payment method */}
           <div className="flex gap-2">
             {(["cash", "card_on_file"] as const).map((method) => (
@@ -284,7 +318,7 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
           )}
           <button
             onClick={checkout}
-            disabled={cart.length === 0 || processing}
+            disabled={cart.length === 0 || processing || walkInMissing}
             className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-base transition"
           >
             {processing ? "Processing…" : `Charge ${fmt(total)}`}

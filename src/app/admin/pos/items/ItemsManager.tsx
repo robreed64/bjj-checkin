@@ -8,16 +8,20 @@ type Item = {
   taxRate: number; stock: number | null; category: string; barcode: string | null;
 };
 
-const CATEGORIES = ["drinks", "gear", "events"];
 const CAT_PILL: Record<string, string> = {
-  drinks: "bg-cyan-900/50 text-cyan-300",
-  gear:   "bg-violet-900/50 text-violet-300",
-  events: "bg-amber-900/50 text-amber-300",
+  drinks:   "bg-cyan-900/50 text-cyan-300",
+  gear:     "bg-violet-900/50 text-violet-300",
+  events:   "bg-amber-900/50 text-amber-300",
+  day_pass: "bg-green-900/50 text-green-300",
 };
 
 const EMPTY_FORM = { name: "", priceCents: "", taxRate: "0", stock: "", category: "drinks", barcode: "" };
 
-export default function ItemsManager({ initialItems }: { initialItems: Item[] }) {
+function catLabel(slug: string) {
+  return slug.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export default function ItemsManager({ initialItems, categories: CATEGORIES }: { initialItems: Item[]; categories: string[] }) {
   const router = useRouter();
   const [items,       setItems]       = useState<Item[]>(initialItems);
   const [showForm,    setShowForm]    = useState(false);
@@ -91,7 +95,7 @@ export default function ItemsManager({ initialItems }: { initialItems: Item[] })
           {["all", ...CATEGORIES].map((cat) => (
             <button key={cat} onClick={() => setFilterCat(cat)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition ${filterCat === cat ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
-              {cat}
+              {cat === "all" ? "All" : catLabel(cat)}
             </button>
           ))}
         </div>
@@ -181,7 +185,7 @@ export default function ItemsManager({ initialItems }: { initialItems: Item[] })
                 <Field label="Category">
                   <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                     className="input-field">
-                    {CATEGORIES.map((c) => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{catLabel(c)}</option>)}
                   </select>
                 </Field>
                 <Field label="Stock (leave blank = unlimited)">
