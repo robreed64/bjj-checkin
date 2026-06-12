@@ -5,6 +5,9 @@ import { requireAuth } from "@/lib/require-auth";
 type Params = Promise<{ id: string }>;
 
 export async function PUT(req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("pos");
+  if (error) return error;
+
   const { id } = await params;
   const { name, barcode, priceCents, taxRate, stock, category } = await req.json();
   const item = await prisma.item.update({
@@ -22,6 +25,9 @@ export async function PUT(req: Request, { params }: { params: Params }) {
 }
 
 export async function DELETE(_req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("pos");
+  if (error) return error;
+
   const { id } = await params;
   await prisma.item.delete({ where: { id: Number(id) } });
   return new NextResponse(null, { status: 204 });

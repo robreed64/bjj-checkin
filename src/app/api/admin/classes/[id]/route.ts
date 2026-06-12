@@ -5,6 +5,9 @@ import { requireAuth } from "@/lib/require-auth";
 type Params = Promise<{ id: string }>;
 
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
+  const { error } = await requireAuth("schedule");
+  if (error) return error;
+
   const { id } = await params;
   const classId = parseInt(id, 10);
   const body    = await req.json();
@@ -27,6 +30,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Params }) {
+  const { error } = await requireAuth("schedule");
+  if (error) return error;
+
   const { id } = await params;
   const classId = parseInt(id, 10);
 

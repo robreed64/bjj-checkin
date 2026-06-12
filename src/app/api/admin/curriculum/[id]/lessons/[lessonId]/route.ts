@@ -5,6 +5,9 @@ import { requireAuth } from "@/lib/require-auth";
 type Params = Promise<{ id: string; lessonId: string }>;
 
 export async function PUT(req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("curriculum");
+  if (error) return error;
+
   const { lessonId } = await params;
   const { title, weekNumber, dayOfWeek, warmup, techniques, notes, position } = await req.json();
 
@@ -24,6 +27,9 @@ export async function PUT(req: Request, { params }: { params: Params }) {
 }
 
 export async function DELETE(_req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("curriculum");
+  if (error) return error;
+
   const { lessonId } = await params;
   await prisma.curriculumLesson.delete({ where: { id: Number(lessonId) } });
   return new NextResponse(null, { status: 204 });

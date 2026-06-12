@@ -5,6 +5,9 @@ import { requireAuth } from "@/lib/require-auth";
 type Params = Promise<{ id: string }>;
 
 export async function PATCH(req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("members");
+  if (error) return error;
+
   const { id } = await params;
   const memberId = parseInt(id, 10);
   if (isNaN(memberId)) return NextResponse.json({ error: "Invalid member" }, { status: 400 });

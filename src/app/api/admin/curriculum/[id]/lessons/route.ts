@@ -5,6 +5,9 @@ import { requireAuth } from "@/lib/require-auth";
 type Params = Promise<{ id: string }>;
 
 export async function POST(req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("curriculum");
+  if (error) return error;
+
   const { id } = await params;
   const curriculumId = Number(id);
   const { title, weekNumber, dayOfWeek, warmup, techniques, notes, position } = await req.json();

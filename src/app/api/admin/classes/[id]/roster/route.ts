@@ -5,6 +5,9 @@ import { requireAuth } from "@/lib/require-auth";
 type Params = Promise<{ id: string }>;
 
 export async function GET(_req: NextRequest, { params }: { params: Params }) {
+  const { error } = await requireAuth("schedule");
+  if (error) return error;
+
   const { id } = await params;
   const classId = parseInt(id, 10);
 
@@ -29,6 +32,9 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
 
 // Add member to roster (creates booking + optionally marks attended)
 export async function POST(req: NextRequest, { params }: { params: Params }) {
+  const { error } = await requireAuth("schedule");
+  if (error) return error;
+
   const { id } = await params;
   const classId  = parseInt(id, 10);
   const { memberId, markAttended } = await req.json();

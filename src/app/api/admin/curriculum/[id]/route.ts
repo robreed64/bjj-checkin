@@ -5,6 +5,9 @@ import { requireAuth } from "@/lib/require-auth";
 type Params = Promise<{ id: string }>;
 
 export async function GET(_req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("curriculum");
+  if (error) return error;
+
   const { id } = await params;
   const curriculum = await prisma.curriculum.findUnique({
     where:   { id: Number(id) },
@@ -17,6 +20,9 @@ export async function GET(_req: Request, { params }: { params: Params }) {
 }
 
 export async function PUT(req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("curriculum");
+  if (error) return error;
+
   const { id } = await params;
   const { name, description, beltLevel, weeks, active } = await req.json();
   const curriculum = await prisma.curriculum.update({
@@ -33,6 +39,9 @@ export async function PUT(req: Request, { params }: { params: Params }) {
 }
 
 export async function DELETE(_req: Request, { params }: { params: Params }) {
+  const { error } = await requireAuth("curriculum");
+  if (error) return error;
+
   const { id } = await params;
   await prisma.curriculum.delete({ where: { id: Number(id) } });
   return new NextResponse(null, { status: 204 });
