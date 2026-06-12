@@ -7,7 +7,6 @@ import Link from "next/link";
 const PLAN_TYPES = ["gi", "no-gi", "family", "kids", "online", "drop-in"];
 
 const input = "w-full px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm transition";
-const readOnly = "w-full px-3 py-2.5 rounded-lg bg-gray-900 border border-gray-800 text-gray-500 text-sm cursor-not-allowed";
 
 type Plan = {
   id:              number;

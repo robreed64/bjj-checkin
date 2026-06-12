@@ -9,13 +9,13 @@ type MemberSummary = { id: number; name: string; beltRank: string | null };
 type Props = {
   memberId:    number;
   currentParent: MemberSummary | null;
-  children:      MemberSummary[];
+  childMembers:  MemberSummary[];
 };
 
-export default function FamilyManager({ memberId, currentParent, children }: Props) {
+export default function FamilyManager({ memberId, currentParent, childMembers }: Props) {
   const router   = useRouter();
   const [parent, setParent]     = useState<MemberSummary | null>(currentParent);
-  const [kids,   setKids]       = useState<MemberSummary[]>(children);
+  const [kids,   setKids]       = useState<MemberSummary[]>(childMembers);
   const [search, setSearch]     = useState("");
   const [results, setResults]   = useState<MemberSummary[]>([]);
   const [loading, setLoading]   = useState(false);

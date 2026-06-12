@@ -182,7 +182,7 @@ export default async function MemberDetailPage({ params }: { params: Params }) {
         <FamilyManager
           memberId={member.id}
           currentParent={member.parent ? { id: member.parent.id, name: member.parent.name, beltRank: null } : null}
-          children={member.children.map((c) => ({ id: c.id, name: c.name, beltRank: c.beltRank }))}
+          childMembers={member.children.map((c) => ({ id: c.id, name: c.name, beltRank: c.beltRank }))}
         />
       </div>
 

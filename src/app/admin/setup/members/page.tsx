@@ -50,7 +50,7 @@ export default async function SetupMembersPage() {
           <span>Add new member</span><span className="text-gray-500">→</span>
         </Link>
         <p className="text-xs text-gray-600 pt-2">
-          To delete a member, reset portal passwords, or manually overwrite a check-in — open the member's detail page from the list above.
+          To delete a member, reset portal passwords, or manually overwrite a check-in — open the member&apos;s detail page from the list above.
         </p>
       </div>
 

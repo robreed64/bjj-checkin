@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { BELT_STYLES, BELT_ORDER } from "@/lib/belt-data";
+import { BELT_ORDER } from "@/lib/belt-data";
 import { ExportBar } from "./ExportBar";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -190,7 +190,6 @@ export default async function ReportsPage() {
   const d = await getData();
 
   const activePct  = d.totalMembers ? Math.round(((d.statusMap.active  ?? 0) / d.totalMembers) * 100) : 0;
-  const trialPct   = d.totalMembers ? Math.round(((d.statusMap.trial   ?? 0) / d.totalMembers) * 100) : 0;
   const pastDuePct = d.totalMembers ? Math.round(((d.statusMap.past_due ?? 0) / d.totalMembers) * 100) : 0;
 
   const maxDow    = Math.max(1, ...Object.values(d.attendanceByDow));

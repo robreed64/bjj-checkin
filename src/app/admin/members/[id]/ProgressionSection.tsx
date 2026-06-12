@@ -39,7 +39,7 @@ function ProgressBar({ value, min, label }: { value: number; min: number; label:
 }
 
 export default function ProgressionSection({
-  memberId, currentBelt, nextBelt, totalClasses, monthsTraining, requirement, initialTechniques,
+  memberId, nextBelt, totalClasses, monthsTraining, requirement, initialTechniques,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();

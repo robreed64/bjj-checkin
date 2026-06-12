@@ -1,7 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import Link from "next/link";
 
 const BELT_STYLES: Record<string, { bg: string; text: string }> = {
   white:  { bg: "bg-white",      text: "text-gray-900" },

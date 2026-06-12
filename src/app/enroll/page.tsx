@@ -393,7 +393,7 @@ export default function EnrollPage() {
 
 // ── Enrollment photo capture (shown on success screen) ───────────────────────
 
-function EnrollPhotoCapture({ memberId, memberName }: { memberId: number; memberName: string }) {
+function EnrollPhotoCapture({ memberId }: { memberId: number; memberName: string }) {
   const [preview, setPreview]     = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [done, setDone]           = useState(false);

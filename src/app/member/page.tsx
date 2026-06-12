@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { BELT_STYLES, BELT_ORDER, getNextBelt } from "@/lib/belt-data";
+import { BELT_STYLES, getNextBelt } from "@/lib/belt-data";
 
 const STATUS_PILL: Record<string, string> = {
   active:   "bg-green-500/15 text-green-400",
