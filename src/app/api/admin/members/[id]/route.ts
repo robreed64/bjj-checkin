@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getStripeClient } from "@/lib/stripe";
+import { getProviderByName } from "@/lib/payments/provider";
 import { requireAuth } from "@/lib/require-auth";
 
 type Params = Promise<{ id: string }>;
@@ -70,13 +70,23 @@ export async function DELETE(_req: NextRequest, { params }: { params: Params }) 
   const member = await prisma.member.findUnique({ where: { id: memberId } });
   if (!member) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Cancel Stripe subscriptions before deleting
-  const stripe = await getStripeClient();
-  if (stripe && member.stripeCustomerId) {
-    try {
-      const subs = await stripe.subscriptions.list({ customer: member.stripeCustomerId, status: "active" });
-      await Promise.all(subs.data.map((s) => stripe.subscriptions.cancel(s.id)));
-    } catch { /* non-fatal */ }
+  // Cancel payment-provider subscriptions before deleting — check both
+  // providers, since the member may hold subs from before a provider switch
+  if (member.stripeCustomerId) {
+    const stripeProvider = await getProviderByName("stripe");
+    if (stripeProvider) {
+      try {
+        await stripeProvider.cancelActiveSubscriptionsForCustomer(member);
+      } catch { /* non-fatal */ }
+    }
+  }
+  if (member.squareCustomerId) {
+    const squareProvider = await getProviderByName("square");
+    if (squareProvider) {
+      try {
+        await squareProvider.cancelActiveSubscriptionsForCustomer(member);
+      } catch { /* non-fatal */ }
+    }
   }
 
   // Cascade delete in dependency order

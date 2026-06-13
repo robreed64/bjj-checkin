@@ -23,7 +23,10 @@ export async function PATCH(req: Request) {
     "waiverText", "currency", "currencySymbol", "locale", "timezone",
     "defaultTaxRate", "setupComplete",
     "beltConfig", "instructorNames", "posCategories",
+    "paymentProvider",
     "stripePublishableKey", "stripeSecretKey", "stripeWebhookSecret",
+    "squareAccessToken", "squareApplicationId", "squareLocationId",
+    "squareWebhookSignatureKey", "squareEnvironment", "squareTerminalDeviceId",
     "brevoApiKey", "brevoSenderEmail", "brevoSenderName", "brevoSmsFrom",
     "familyDiscountEnabled", "familyDiscountPercent",
     "trialLengthDays",
@@ -35,6 +38,15 @@ export async function PATCH(req: Request) {
 
   // Don't overwrite secrets with empty strings
   if (!data.brevoApiKey) delete data.brevoApiKey;
+  if (!data.squareAccessToken) delete data.squareAccessToken;
+  if (!data.squareWebhookSignatureKey) delete data.squareWebhookSignatureKey;
+
+  if (data.paymentProvider !== undefined && !["stripe", "square"].includes(data.paymentProvider as string)) {
+    return NextResponse.json({ error: "Invalid payment provider" }, { status: 400 });
+  }
+  if (data.squareEnvironment !== undefined && !["sandbox", "production"].includes(data.squareEnvironment as string)) {
+    return NextResponse.json({ error: "Invalid Square environment" }, { status: 400 });
+  }
 
   if (data.defaultTaxRate !== undefined) {
     const rate = Number(data.defaultTaxRate);

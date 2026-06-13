@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/require-member";
-import { getStripeClient } from "@/lib/stripe";
+import { getPaymentProvider } from "@/lib/payments/provider";
 
 export async function GET() {
   const auth = await requireMember();
@@ -10,26 +10,15 @@ export async function GET() {
 
   const member = await prisma.member.findUnique({
     where: { id: memberId },
-    select: { stripeCustomerId: true },
+    select: { id: true, stripeCustomerId: true, squareCustomerId: true, squareCardId: true },
   });
-  if (!member?.stripeCustomerId) return NextResponse.json({ card: null });
+  if (!member) return NextResponse.json({ card: null });
 
-  const stripe = await getStripeClient();
-  if (!stripe) return NextResponse.json({ card: null });
+  const provider = await getPaymentProvider();
+  if (!provider) return NextResponse.json({ card: null });
 
-  try {
-    const customer = await stripe.customers.retrieve(member.stripeCustomerId, {
-      expand: ["invoice_settings.default_payment_method"],
-    });
-    if ("deleted" in customer) return NextResponse.json({ card: null });
-    const pm = customer.invoice_settings?.default_payment_method;
-    if (!pm || typeof pm === "string") return NextResponse.json({ card: null });
-    return NextResponse.json({
-      card: { brand: pm.card?.brand ?? null, last4: pm.card?.last4 ?? null },
-    });
-  } catch {
-    return NextResponse.json({ card: null });
-  }
+  const card = await provider.getDefaultCard(member);
+  return NextResponse.json({ card });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -44,26 +33,32 @@ export async function PATCH(req: NextRequest) {
 
   const member = await prisma.member.findUnique({
     where: { id: memberId },
-    select: { stripeCustomerId: true },
+    select: { stripeCustomerId: true, squareCustomerId: true },
   });
-  if (!member?.stripeCustomerId) {
-    return NextResponse.json({ error: "No Stripe customer on file" }, { status: 400 });
+
+  const provider = await getPaymentProvider();
+  if (!provider) return NextResponse.json({ error: "Payments not configured" }, { status: 503 });
+
+  const customerId =
+    provider.name === "square" ? member?.squareCustomerId : member?.stripeCustomerId;
+  if (!customerId) {
+    return NextResponse.json({ error: "No customer on file" }, { status: 400 });
   }
 
-  const stripe = await getStripeClient();
-  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
+  const saved = await provider.saveCard(customerId, paymentMethodId);
 
-  await stripe.paymentMethods.attach(paymentMethodId, { customer: member.stripeCustomerId });
-  await stripe.customers.update(member.stripeCustomerId, {
-    invoice_settings: { default_payment_method: paymentMethodId },
-  });
+  if (provider.name === "square") {
+    await prisma.member.update({ where: { id: memberId }, data: { squareCardId: saved.cardId } });
+  }
 
+  // Point active subscriptions on this provider at the new card
+  const refColumn = provider.name === "square" ? "squareSubscriptionId" : "stripeSubscriptionId";
   const subs = await prisma.subscription.findMany({
-    where: { memberId, status: "active", stripeSubscriptionId: { not: null } },
+    where: { memberId, status: "active", [refColumn]: { not: null } },
   });
   for (const sub of subs) {
-    await stripe.subscriptions
-      .update(sub.stripeSubscriptionId!, { default_payment_method: paymentMethodId })
+    await provider
+      .updateSubscriptionCard(sub[refColumn]!, saved.cardId)
       .catch(() => {});
   }
 

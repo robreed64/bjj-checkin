@@ -1,75 +1,87 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getStripeClient } from "@/lib/stripe";
+import { getPaymentProvider, type PaymentProvider } from "@/lib/payments/provider";
+import type { PlanRefs } from "@/lib/payments/types";
+import type { MembershipPlan } from "@prisma/client";
+import { getGymSettings } from "@/lib/gym-settings";
 import bcrypt from "bcryptjs";
 import { sendEmail } from "@/lib/email";
+
+// Plans created while the other provider was active have no refs on this one —
+// create them lazily so enrollment doesn't dead-end after a provider switch.
+async function ensurePlanRefs(provider: PaymentProvider, plan: MembershipPlan): Promise<PlanRefs | null> {
+  if (provider.name === "stripe") {
+    // Preserve original behavior: a plan with no Stripe price enrolls as trial
+    return plan.stripePriceId ? { stripePriceId: plan.stripePriceId } : null;
+  }
+  if (plan.squarePlanVariationId) {
+    return {
+      squareCatalogPlanId: plan.squareCatalogPlanId,
+      squarePlanVariationId: plan.squarePlanVariationId,
+    };
+  }
+  const settings = await getGymSettings();
+  const refs = await provider.createPlan({
+    name: plan.name,
+    description: plan.description,
+    priceCents: plan.priceCents,
+    billingInterval: plan.billingInterval,
+    currency: settings.currency,
+  });
+  await prisma.membershipPlan.update({ where: { id: plan.id }, data: refs });
+  return refs;
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     name, email, phone, dateOfBirth, ageGroup, trainingType,
-    planId, stripeCustomerId, paymentMethodId, promoCode,
+    planId, paymentMethodId, promoCode,
   } = body;
+  // `customerId` is the provider customer from the payment step;
+  // `stripeCustomerId` is the legacy field name from older clients
+  const customerIdInput: string | null = body.customerId ?? body.stripeCustomerId ?? null;
 
   if (!name?.trim() || !email?.trim() || !phone?.trim()) {
     return NextResponse.json({ error: "Name, email, and phone are required" }, { status: 400 });
   }
 
-  let resolvedCustomerId = stripeCustomerId ?? null;
-  let stripeSubId: string | null = null;
+  let resolvedCustomerId = customerIdInput;
+  let subscriptionRef: string | null = null;
   let memberStatus = planId ? "active" : "trial";
 
-  const stripe = await getStripeClient();
+  const provider = await getPaymentProvider();
+  let savedCardId: string | null = null;
 
-  if (planId && stripe) {
+  if (planId && provider) {
     const plan = await prisma.membershipPlan.findUnique({ where: { id: parseInt(planId, 10) } });
+    const planRefs = plan ? await ensurePlanRefs(provider, plan) : null;
 
-    if (plan?.stripePriceId) {
+    if (planRefs) {
       // Create customer if we somehow don't have one yet
       if (!resolvedCustomerId) {
-        const customer = await stripe.customers.create({ name, email });
-        resolvedCustomerId = customer.id;
+        resolvedCustomerId = await provider.createCustomer({ name, email });
       }
 
-      // Attach payment method if provided
+      // Attach/store the card and make it the default
       if (paymentMethodId) {
-        await stripe.paymentMethods.attach(paymentMethodId, { customer: resolvedCustomerId });
-        await stripe.customers.update(resolvedCustomerId, {
-          invoice_settings: { default_payment_method: paymentMethodId },
-        });
+        const saved = await provider.saveCard(resolvedCustomerId, paymentMethodId);
+        savedCardId = saved.cardId;
       }
 
-      // Re-validate the promo code server-side; an invalid code never blocks enrollment
-      let promotionCodeId: string | null = null;
-      if (promoCode?.trim()) {
-        try {
-          const codes = await stripe.promotionCodes.list({ code: promoCode.trim(), active: true, limit: 1 });
-          promotionCodeId = codes.data[0]?.id ?? null;
-        } catch { /* enroll without discount */ }
-      }
+      const memberRefs = {
+        stripeCustomerId: provider.name === "stripe" ? resolvedCustomerId : null,
+        squareCustomerId: provider.name === "square" ? resolvedCustomerId : null,
+        squareCardId: provider.name === "square" ? savedCardId : null,
+      };
 
-      const createSubscription = (withPromo: boolean) =>
-        stripe.subscriptions.create({
-          customer:         resolvedCustomerId!,
-          items:            [{ price: plan.stripePriceId! }],
-          ...(withPromo && promotionCodeId && { discounts: [{ promotion_code: promotionCodeId }] }),
-          payment_behavior: "default_incomplete",
-          expand:           ["latest_invoice.payment_intent"],
-        });
-
-      let sub;
-      try {
-        sub = await createSubscription(true);
-      } catch (err) {
-        // A code can list as active yet be ineligible at attach time (first-time-only,
-        // currency/product restrictions) — enroll without the discount rather than 500
-        if (!promotionCodeId) throw err;
-        console.warn(`Promo code rejected at subscribe time, enrolling without it:`, err);
-        sub = await createSubscription(false);
-      }
-
-      stripeSubId  = sub.id;
-      memberStatus = sub.status === "active" || sub.status === "trialing" ? "active" : "past_due";
+      const sub = await provider.createSubscription({
+        member: memberRefs,
+        planRefs,
+        promoCode,
+      });
+      subscriptionRef = sub.subscriptionRef;
+      memberStatus = sub.status;
     }
   }
 
@@ -85,14 +97,16 @@ export async function POST(req: NextRequest) {
       beltRank:        "white",
       status:          memberStatus,
       trialStartedAt:  memberStatus === "trial" ? new Date() : null,
-      stripeCustomerId: resolvedCustomerId,
+      stripeCustomerId: provider?.name === "square" ? null : resolvedCustomerId,
+      squareCustomerId: provider?.name === "square" ? resolvedCustomerId : null,
+      squareCardId:     provider?.name === "square" ? savedCardId : null,
       waiverSignedAt:  new Date(),
     },
   });
 
-  // Update Stripe customer with the new member's DB id in metadata
-  if (resolvedCustomerId && stripe) {
-    await stripe.customers.update(resolvedCustomerId, { metadata: { memberId: String(member.id) } }).catch(() => {});
+  // Update the provider customer with the new member's DB id
+  if (resolvedCustomerId && provider) {
+    await provider.tagCustomerWithMember(resolvedCustomerId, member.id);
   }
 
   // Create subscription record
@@ -101,7 +115,8 @@ export async function POST(req: NextRequest) {
       data: {
         memberId:             member.id,
         planId:               parseInt(planId, 10),
-        stripeSubscriptionId: stripeSubId,
+        stripeSubscriptionId: provider?.name === "square" ? null : subscriptionRef,
+        squareSubscriptionId: provider?.name === "square" ? subscriptionRef : null,
         status:               memberStatus,
         startDate:            new Date(),
       },

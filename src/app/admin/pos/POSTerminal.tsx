@@ -1,13 +1,19 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 type Item = {
   id: number; name: string; priceCents: number;
   taxRate: number; stock: number | null; category: string; barcode: string | null;
 };
 type CartLine  = { item: Item; quantity: number };
-type Member    = { id: number; name: string; stripeCustomerId: string | null };
+type Member    = {
+  id: number; name: string;
+  stripeCustomerId: string | null;
+  squareCustomerId?: string | null;
+  squareCardId?: string | null;
+};
+type PayMethod = "cash" | "card_on_file" | "square_terminal";
 
 // Cycling color palette for dynamic categories
 const PALETTE_TAB = [
@@ -35,14 +41,25 @@ function fmt(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-export default function POSTerminal({ initialItems, categories }: { initialItems: Item[]; categories: string[] }) {
+export default function POSTerminal({
+  initialItems,
+  categories,
+  paymentProvider = "stripe",
+  terminalEnabled = false,
+}: {
+  initialItems: Item[];
+  categories: string[];
+  paymentProvider?: "stripe" | "square";
+  terminalEnabled?: boolean;
+}) {
   const [items]       = useState<Item[]>(initialItems);
   const [tab, setTab] = useState<string>(categories[0] ?? "drinks");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [memberQ, setMemberQ]     = useState("");
   const [memberResults, setMemberResults] = useState<Member[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [payMethod, setPayMethod] = useState<"cash" | "card_on_file">("cash");
+  const [payMethod, setPayMethod] = useState<PayMethod>("cash");
+  const [pendingTerminalId, setPendingTerminalId] = useState<number | null>(null);
   const [processing, setProcessing] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [walkInName, setWalkInName]   = useState("");
@@ -85,43 +102,76 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
   const needsWalkIn   = hasDayPass && !selectedMember;
   const walkInMissing = needsWalkIn && !walkInName.trim();
 
+  const resetCart = () => {
+    setCart([]);
+    setSelectedMember(null);
+    setMemberQ("");
+    setWalkInName("");
+    setWalkInEmail("");
+  };
+
   const checkout = async () => {
     if (cart.length === 0) return;
     setProcessing(true);
     setCheckoutError(null);
+    const payload = {
+      memberId: selectedMember?.id ?? null,
+      lineItems: cart.map((l) => ({ itemId: l.item.id, quantity: l.quantity })),
+      ...(needsWalkIn && walkInName.trim() && {
+        walkIn: { name: walkInName, email: walkInEmail || undefined },
+      }),
+    };
     try {
-      const res = await fetch("/api/admin/pos/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          memberId:          selectedMember?.id ?? null,
-          paymentMethodType: payMethod,
-          lineItems: cart.map((l) => ({
-            itemId:   l.item.id,
-            quantity: l.quantity,
-          })),
-          ...(needsWalkIn && walkInName.trim() && {
-            walkIn: { name: walkInName, email: walkInEmail || undefined },
-          }),
-        }),
-      });
-      if (res.ok) {
-        const sale = await res.json();
-        setReceipt({ total: sale.totalCents, id: sale.id, checkedIn: sale.checkedIn, waiverPending: sale.waiverPending });
-        setCart([]);
-        setSelectedMember(null);
-        setMemberQ("");
-        setWalkInName("");
-        setWalkInEmail("");
-      } else {
+      if (payMethod === "square_terminal") {
+        // Async flow: the charge completes on the Square Terminal device
+        const res = await fetch("/api/admin/pos/terminal-checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
         const data = await res.json().catch(() => null);
-        setCheckoutError(data?.error ?? "Checkout failed — try again");
+        if (res.ok) setPendingTerminalId(data.id);
+        else setCheckoutError(data?.error ?? "Checkout failed — try again");
+      } else {
+        const res = await fetch("/api/admin/pos/sales", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, paymentMethodType: payMethod }),
+        });
+        if (res.ok) {
+          const sale = await res.json();
+          setReceipt({ total: sale.totalCents, id: sale.id, checkedIn: sale.checkedIn, waiverPending: sale.waiverPending });
+          resetCart();
+        } else {
+          const data = await res.json().catch(() => null);
+          setCheckoutError(data?.error ?? "Checkout failed — try again");
+        }
       }
     } catch {
       setCheckoutError("Checkout failed — try again");
     }
     setProcessing(false);
   };
+
+  if (pendingTerminalId !== null) {
+    return (
+      <TerminalWaitPanel
+        pendingId={pendingTerminalId}
+        total={total}
+        onDone={(sale) => {
+          setPendingTerminalId(null);
+          if (sale) {
+            setReceipt({ total: sale.totalCents, id: sale.id, checkedIn: sale.checkedIn, waiverPending: sale.waiverPending });
+            resetCart();
+          }
+        }}
+        onError={(msg) => {
+          setPendingTerminalId(null);
+          setCheckoutError(msg);
+        }}
+      />
+    );
+  }
 
   if (receipt) {
     return (
@@ -297,18 +347,33 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
 
           {/* Payment method */}
           <div className="flex gap-2">
-            {(["cash", "card_on_file"] as const).map((method) => (
+            {(
+              [
+                { method: "cash" as PayMethod, label: "Cash", disabled: false },
+                {
+                  method: "card_on_file" as PayMethod,
+                  label: "Card on File",
+                  // Card-on-file needs the provider-appropriate saved card
+                  disabled: paymentProvider === "square"
+                    ? !selectedMember?.squareCardId
+                    : !selectedMember?.stripeCustomerId,
+                },
+                ...(terminalEnabled
+                  ? [{ method: "square_terminal" as PayMethod, label: "Card (Terminal)", disabled: false }]
+                  : []),
+              ]
+            ).map(({ method, label, disabled }) => (
               <button
                 key={method}
                 onClick={() => setPayMethod(method)}
-                disabled={method === "card_on_file" && !selectedMember?.stripeCustomerId}
+                disabled={disabled}
                 className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition disabled:opacity-40 disabled:cursor-not-allowed ${
                   payMethod === method
                     ? "bg-blue-600 border-blue-500 text-white"
                     : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:border-gray-600"
                 }`}
               >
-                {method === "cash" ? "Cash" : "Card on File"}
+                {label}
               </button>
             ))}
           </div>
@@ -334,6 +399,86 @@ export default function POSTerminal({ initialItems, categories }: { initialItems
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Square Terminal wait panel ────────────────────────────────────────────────
+// Polls the pending checkout every 2s (capped at 5 minutes, matching the
+// device-side deadline) until the customer taps, cancels, or times out.
+
+type TerminalSale = { id: number; totalCents: number; checkedIn?: boolean; waiverPending?: boolean };
+
+function TerminalWaitPanel({
+  pendingId,
+  total,
+  onDone,
+  onError,
+}: {
+  pendingId: number;
+  total: number;
+  onDone: (sale: TerminalSale | null) => void;
+  onError: (message: string) => void;
+}) {
+  const [canceling, setCanceling] = useState(false);
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    const finish = (fn: () => void) => {
+      if (doneRef.current) return;
+      doneRef.current = true;
+      fn();
+    };
+
+    const interval = setInterval(async () => {
+      if (doneRef.current) return;
+      if (Date.now() - startedAt > 5 * 60 * 1000) {
+        await fetch(`/api/admin/pos/terminal-checkout/${pendingId}`, { method: "DELETE" }).catch(() => {});
+        finish(() => onError("Terminal payment timed out"));
+        return;
+      }
+      try {
+        const res = await fetch(`/api/admin/pos/terminal-checkout/${pendingId}`);
+        if (!res.ok) return; // transient — keep polling
+        const data = await res.json();
+        if (data.status === "completed" && data.sale) {
+          finish(() => onDone(data.sale));
+        } else if (data.status === "canceled" || data.status === "failed") {
+          finish(() => onError("Terminal payment was canceled"));
+        }
+      } catch { /* transient — keep polling */ }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingId]);
+
+  const cancel = async () => {
+    setCanceling(true);
+    try {
+      await fetch(`/api/admin/pos/terminal-checkout/${pendingId}`, { method: "DELETE" });
+    } catch { /* the next poll will pick up the state */ }
+    if (!doneRef.current) {
+      doneRef.current = true;
+      onError("Terminal payment was canceled");
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
+      <div className="w-12 h-12 border-4 border-gray-700 border-t-blue-500 rounded-full animate-spin" />
+      <div>
+        <p className="text-2xl font-bold text-white">{fmt(total)}</p>
+        <p className="text-gray-400 mt-1">Waiting for the customer to tap on the Square Terminal…</p>
+      </div>
+      <button
+        onClick={cancel}
+        disabled={canceling}
+        className="px-6 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white font-semibold transition"
+      >
+        {canceling ? "Canceling…" : "Cancel"}
+      </button>
     </div>
   );
 }

@@ -16,9 +16,16 @@ type GymSettings = {
   locale: string;
   timezone: string;
   defaultTaxRate: number;
+  paymentProvider: string;
   stripePublishableKey: string | null;
   stripeSecretKey: string | null;
   stripeWebhookSecret: string | null;
+  squareAccessToken: string | null;
+  squareApplicationId: string | null;
+  squareLocationId: string | null;
+  squareWebhookSignatureKey: string | null;
+  squareEnvironment: string;
+  squareTerminalDeviceId: string | null;
   brevoApiKey: string | null;
   brevoSenderEmail: string | null;
   brevoSenderName: string | null;
@@ -95,6 +102,17 @@ export default function SettingsPage() {
   const [stripeWh,      setStripeWh]      = useState("");
   const [stripeStatus,  setStripeStatus]  = useState<"idle" | "loading" | "ok" | "error">("idle");
 
+  // Square state
+  const [squareToken,   setSquareToken]   = useState("");
+  const [squareWh,      setSquareWh]      = useState("");
+  const [squareStatus,  setSquareStatus]  = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [providerStatus, setProviderStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [subStats, setSubStats] = useState<{ stripeActive: number; squareActive: number } | null>(null);
+
+  // Terminal pairing state
+  const [pairing, setPairing] = useState<{ id: string; code: string | null } | null>(null);
+  const [pairError, setPairError] = useState<string | null>(null);
+
   // Brevo state
   const [brevoKey,      setBrevoKey]      = useState("");
   const [brevoStatus,   setBrevoStatus]   = useState<"idle" | "loading" | "ok" | "error">("idle");
@@ -116,7 +134,52 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetch("/api/admin/settings").then(r => r.json()).then(setSettings);
+    fetch("/api/admin/payments/stats").then(r => r.json()).then(setSubStats).catch(() => {});
   }, []);
+
+  // Poll pairing status while a device code is outstanding
+  useEffect(() => {
+    if (!pairing) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/admin/square/device-code?id=${pairing.id}`);
+        const data = await res.json();
+        if (data.status === "PAIRED" && data.deviceId) {
+          setPairing(null);
+          setSettings(s => s ? { ...s, squareTerminalDeviceId: data.deviceId } : s);
+        } else if (data.status === "EXPIRED") {
+          setPairing(null);
+          setPairError("Pairing code expired — try again");
+        }
+      } catch { /* keep polling */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [pairing]);
+
+  const startPairing = async () => {
+    setPairError(null);
+    const res = await fetch("/api/admin/square/device-code", { method: "POST" });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.id) setPairing({ id: data.id, code: data.code });
+    else setPairError(data?.error ?? "Could not create a pairing code");
+  };
+
+  const handleSquare = async (e: FormEvent) => {
+    e.preventDefault();
+    setSquareStatus("loading");
+    const payload: Record<string, string> = {
+      // Non-secret fields always reflect what's on screen
+      squareApplicationId: settings!.squareApplicationId ?? "",
+      squareLocationId:    settings!.squareLocationId ?? "",
+      squareEnvironment:   settings!.squareEnvironment || "sandbox",
+    };
+    if (squareToken.trim()) payload.squareAccessToken = squareToken.trim();
+    if (squareWh.trim())    payload.squareWebhookSignatureKey = squareWh.trim();
+    const ok = await patch(payload as Partial<GymSettings>);
+    if (ok) { setSquareToken(""); setSquareWh(""); router.refresh(); }
+    setSquareStatus(ok ? "ok" : "error");
+    setTimeout(() => setSquareStatus("idle"), 2500);
+  };
 
   const patch = async (data: Partial<GymSettings>) => {
     const res = await fetch("/api/admin/settings", {
@@ -298,6 +361,178 @@ export default function SettingsPage() {
         </form>
       </Section>
 
+      {/* Payment Provider */}
+      <Section title="Payment Provider">
+        <form onSubmit={e => { e.preventDefault(); save({ paymentProvider: settings.paymentProvider }, setProviderStatus); }} className="space-y-4">
+          <p className="text-xs text-gray-500">
+            New enrollments, subscriptions, and POS card payments run on the selected provider.
+          </p>
+          <div className="flex gap-3">
+            {(["stripe", "square"] as const).map((p) => (
+              <label
+                key={p}
+                className={`flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition ${
+                  settings.paymentProvider === p
+                    ? "border-blue-500 bg-blue-600/10"
+                    : "border-gray-700 bg-gray-800 hover:border-gray-600"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="paymentProvider"
+                  checked={settings.paymentProvider === p}
+                  onChange={() => setSettings({ ...settings, paymentProvider: p })}
+                  className="accent-blue-500"
+                />
+                <span className="text-sm font-semibold text-white capitalize">{p}</span>
+              </label>
+            ))}
+          </div>
+          {subStats && settings.paymentProvider === "square" && subStats.stripeActive > 0 && (
+            <p className="text-xs text-amber-300 bg-amber-900/20 border border-amber-700/60 rounded-lg px-4 py-3">
+              {subStats.stripeActive} active subscription{subStats.stripeActive === 1 ? "" : "s"} will keep
+              billing on Stripe and stay synced via the Stripe webhook. Saved cards do not transfer —
+              new enrollments use Square. Use &ldquo;Sync plans&rdquo; on the Plans page to create your
+              membership plans on Square.
+            </p>
+          )}
+          {subStats && settings.paymentProvider === "stripe" && subStats.squareActive > 0 && (
+            <p className="text-xs text-amber-300 bg-amber-900/20 border border-amber-700/60 rounded-lg px-4 py-3">
+              {subStats.squareActive} active subscription{subStats.squareActive === 1 ? "" : "s"} will keep
+              billing on Square and stay synced via the Square webhook. Saved cards do not transfer —
+              new enrollments use Stripe.
+            </p>
+          )}
+          <SaveButton loading={providerStatus === "loading"} status={providerStatus} />
+        </form>
+      </Section>
+
+      {/* Square */}
+      <Section title="Square Payments">
+        <form onSubmit={handleSquare} className="space-y-4">
+          <p className="text-xs text-gray-500">
+            Create an application at{" "}
+            <a href="https://developer.squareup.com/apps" target="_blank" rel="noreferrer" className="underline">developer.squareup.com</a>.
+            Enter only the secrets you want to update — saved secrets are masked.
+            {settings.squareAccessToken && (
+              <span className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold ${settings.squareEnvironment === "production" ? "bg-green-900/50 text-green-400" : "bg-yellow-900/50 text-yellow-400"}`}>
+                {settings.squareEnvironment === "production" ? "Production" : "Sandbox"}
+              </span>
+            )}
+          </p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Environment</label>
+              <select
+                value={settings.squareEnvironment || "sandbox"}
+                onChange={e => setSettings({ ...settings, squareEnvironment: e.target.value })}
+                className={select}
+              >
+                <option value="sandbox">Sandbox (testing)</option>
+                <option value="production">Production</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Application ID</label>
+              <input
+                type="text"
+                value={settings.squareApplicationId ?? ""}
+                onChange={e => setSettings({ ...settings, squareApplicationId: e.target.value })}
+                className={input}
+                placeholder="sq0idp-…"
+                autoComplete="off"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Access Token
+              {settings.squareAccessToken && <span className="ml-2 font-mono text-gray-600 text-xs">(current: {maskKey(settings.squareAccessToken)})</span>}
+            </label>
+            <PasswordInput
+              value={squareToken}
+              onChange={e => setSquareToken(e.target.value)}
+              className={input}
+              placeholder={settings.squareAccessToken ? "Enter new token to replace…" : "EAAA…"}
+              autoComplete="new-password"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Location ID</label>
+            <input
+              type="text"
+              value={settings.squareLocationId ?? ""}
+              onChange={e => setSettings({ ...settings, squareLocationId: e.target.value })}
+              className={input}
+              placeholder="L1234567890"
+              autoComplete="off"
+            />
+            <p className="text-xs text-gray-600 mt-1">
+              The location&apos;s currency in Square must match the currency configured above.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Webhook Signature Key
+              {settings.squareWebhookSignatureKey && <span className="ml-2 font-mono text-gray-600 text-xs">(current: {maskKey(settings.squareWebhookSignatureKey)})</span>}
+            </label>
+            <PasswordInput
+              value={squareWh}
+              onChange={e => setSquareWh(e.target.value)}
+              className={input}
+              placeholder={settings.squareWebhookSignatureKey ? "Enter new key to replace…" : "Signature key…"}
+              autoComplete="new-password"
+            />
+            <p className="text-xs text-gray-600 mt-1">
+              In the Square developer dashboard, subscribe a webhook to{" "}
+              <code className="bg-gray-800 px-1 rounded">/api/square/webhook</code> with the
+              subscription, invoice, and terminal.checkout events.
+            </p>
+          </div>
+
+          <SaveButton loading={squareStatus === "loading"} status={squareStatus} />
+
+          {/* Terminal pairing */}
+          <div className="border-t border-gray-800 pt-4 space-y-3">
+            <p className="text-xs font-medium text-gray-400">Square Terminal (in-person tap/dip)</p>
+            <p className="text-xs text-gray-600">
+              Requires Square Terminal hardware — the handheld Square Reader is not supported by the
+              Terminal API.
+            </p>
+            {settings.squareTerminalDeviceId ? (
+              <p className="text-xs text-green-400">
+                ✓ Terminal paired <span className="font-mono text-gray-500">({settings.squareTerminalDeviceId})</span>
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500">No Terminal paired yet.</p>
+            )}
+            {pairing ? (
+              <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 space-y-1">
+                <p className="text-sm text-white">
+                  On the Terminal, go to <strong>Settings → Pair Device</strong> and enter:{" "}
+                  <span className="font-mono text-lg font-bold text-blue-400">{pairing.code}</span>
+                </p>
+                <p className="text-xs text-gray-500">Waiting for the device to pair…</p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={startPairing}
+                disabled={!settings.squareAccessToken || !settings.squareLocationId}
+                className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-white text-sm font-medium transition"
+              >
+                {settings.squareTerminalDeviceId ? "Pair a different Terminal" : "Pair Terminal"}
+              </button>
+            )}
+            {pairError && <p className="text-xs text-red-400">{pairError}</p>}
+          </div>
+        </form>
+      </Section>
+
       {/* Stripe */}
       <Section title="Stripe Payments">
         <form onSubmit={handleStripe} className="space-y-4">
@@ -429,7 +664,7 @@ export default function SettingsPage() {
           <p className="text-xs text-gray-500">
             When enabled, staff can apply a discount to sibling subscriptions from the{" "}
             <a href="/admin/families" className="underline text-blue-400 hover:text-blue-300">Family Accounts</a>{" "}
-            page. Discounts are applied via Stripe coupons.
+            page. Discounts are applied via Stripe coupons or Square price overrides, depending on your payment provider.
           </p>
           <div className="flex items-center gap-3">
             <button

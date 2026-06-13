@@ -17,9 +17,18 @@ export default function ConfigWarnings({ settings }: { settings: GymSettings }) 
     gaps.push("Photo and video uploads are disabled (BLOB_READ_WRITE_TOKEN not set)");
   }
 
-  const stripeKey = settings.stripeSecretKey || process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey || stripeKey === "sk_test_...") {
-    gaps.push("Payments are disabled (Stripe secret key not set)");
+  // Warn about whichever provider is selected — the other being unset is fine
+  if (settings.paymentProvider === "square") {
+    const squareToken = settings.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN;
+    const squareLocation = settings.squareLocationId || process.env.SQUARE_LOCATION_ID;
+    if (!squareToken || !squareLocation) {
+      gaps.push("Payments are disabled (Square access token / location ID not set)");
+    }
+  } else {
+    const stripeKey = settings.stripeSecretKey || process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey || stripeKey === "sk_test_...") {
+      gaps.push("Payments are disabled (Stripe secret key not set)");
+    }
   }
 
   if (gaps.length === 0) return null;

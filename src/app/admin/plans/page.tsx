@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { getStripeClient } from "@/lib/stripe";
+import { getPaymentProvider } from "@/lib/payments/provider";
 import DeletePlanButton from "./DeletePlanButton";
+import SyncPlansButton from "./SyncPlansButton";
 
 export default async function PlansPage() {
-  const [plans, stripeClient] = await Promise.all([
+  const [plans, provider] = await Promise.all([
     prisma.membershipPlan.findMany({ orderBy: { priceCents: "asc" } }),
-    getStripeClient(),
+    getPaymentProvider(),
   ]);
-  const stripeConfigured = !!stripeClient;
+  const providerLabel = provider?.name === "square" ? "Square" : "Stripe";
+  const isSynced = (plan: (typeof plans)[number]) =>
+    provider?.name === "square" ? !!plan.squarePlanVariationId : !!plan.stripePriceId;
+  const unsyncedCount = provider ? plans.filter((p) => !isSynced(p)).length : 0;
 
   return (
     <div className="p-8 max-w-4xl">
@@ -16,19 +20,22 @@ export default async function PlansPage() {
         <div>
           <h1 className="text-2xl font-bold">Membership Plans</h1>
           <p className="text-gray-400 text-sm mt-0.5">
-            {stripeConfigured ? (
-              <span className="text-green-400">● Stripe connected</span>
+            {provider ? (
+              <span className="text-green-400">● {providerLabel} connected</span>
             ) : (
-              <span className="text-yellow-400">● Stripe not configured — add keys to .env.local</span>
+              <span className="text-yellow-400">● {providerLabel} not configured — add keys in Settings</span>
             )}
           </p>
         </div>
-        <Link
-          href="/admin/plans/new"
-          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold transition"
-        >
-          + New Plan
-        </Link>
+        <div className="flex items-center gap-3">
+          {provider && unsyncedCount > 0 && <SyncPlansButton providerLabel={providerLabel} />}
+          <Link
+            href="/admin/plans/new"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold transition"
+          >
+            + New Plan
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-xl border border-gray-800 overflow-hidden">
@@ -39,7 +46,7 @@ export default async function PlansPage() {
               <th className="px-4 py-3 font-medium">Type</th>
               <th className="px-4 py-3 font-medium text-right">Price</th>
               <th className="px-4 py-3 font-medium">Interval</th>
-              <th className="px-4 py-3 font-medium">Stripe</th>
+              <th className="px-4 py-3 font-medium">{providerLabel}</th>
               <th className="px-4 py-3 font-medium"></th>
             </tr>
           </thead>
@@ -60,7 +67,7 @@ export default async function PlansPage() {
                 </td>
                 <td className="px-4 py-3 text-gray-400 capitalize">{plan.billingInterval}</td>
                 <td className="px-4 py-3">
-                  {plan.stripePriceId ? (
+                  {isSynced(plan) ? (
                     <span className="text-green-400 text-xs">● Synced</span>
                   ) : (
                     <span className="text-gray-600 text-xs">— Not synced</span>

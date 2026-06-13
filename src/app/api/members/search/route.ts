@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       status: true,
       photoUrl: true,
       trainingType: true,
-      ...(isStaff ? { stripeCustomerId: true } : {}),
+      ...(isStaff ? { stripeCustomerId: true, squareCustomerId: true, squareCardId: true } : {}),
     },
     take: 8,
     orderBy: { name: "asc" },

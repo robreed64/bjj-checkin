@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import SquareCardForm from "@/components/payments/SquareCardForm";
 import QRCode from "react-qr-code";
 import PhotoUploader from "@/components/PhotoUploader";
 import PasswordInput from "@/components/PasswordInput";
@@ -140,10 +141,20 @@ function PasswordSection() {
 
 // ── Card on File ─────────────────────────────────────────────────────────────
 
+type PublicPaymentSettings = {
+  paymentProvider: string;
+  stripePublishableKey: string | null;
+  squareApplicationId: string | null;
+  squareLocationId: string | null;
+  squareEnvironment: string;
+};
+
 function CardSection() {
   const [card, setCard]           = useState<{ brand: string; last4: string } | null>(null);
   const [loading, setLoading]     = useState(true);
   const [showForm, setShowForm]   = useState(false);
+  const [provider, setProvider]   = useState<string>("stripe");
+  const [squareCfg, setSquareCfg] = useState<PublicPaymentSettings | null>(null);
   const [stripePromise, setStripe] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [clientSecret, setSecret] = useState<string | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -157,15 +168,28 @@ function CardSection() {
 
   async function startUpdate() {
     setSetupError(null);
-    const [pubRes, intentRes] = await Promise.all([
+    const [pubRes, sessionRes] = await Promise.all([
       fetch("/api/settings/public").then(r => r.json()),
       fetch("/api/member/setup-intent", { method: "POST" }).then(r => r.json()),
     ]);
-    if (intentRes.error) { setSetupError(intentRes.error); return; }
+    if (sessionRes.error) { setSetupError(sessionRes.error); return; }
+
+    if (sessionRes.provider === "square") {
+      if (!pubRes.squareApplicationId || !pubRes.squareLocationId) {
+        setSetupError("Square not configured");
+        return;
+      }
+      setProvider("square");
+      setSquareCfg(pubRes);
+      setShowForm(true);
+      return;
+    }
+
     const key = pubRes.stripePublishableKey || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
     if (!key || key === "pk_test_...") { setSetupError("Stripe not configured"); return; }
+    setProvider("stripe");
     setStripe(loadStripe(key));
-    setSecret(intentRes.clientSecret);
+    setSecret(sessionRes.clientSecret);
     setShowForm(true);
   }
 
@@ -217,13 +241,35 @@ function CardSection() {
           Add card
         </button>
       )}
-      {showForm && stripePromise && clientSecret && (
+      {showForm && provider === "stripe" && stripePromise && clientSecret && (
         <Elements
           stripe={stripePromise}
           options={{ clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#3b82f6" } } }}
         >
           <CardForm onSuccess={onCardSaved} onCancel={() => setShowForm(false)} />
         </Elements>
+      )}
+      {showForm && provider === "square" && squareCfg?.squareApplicationId && squareCfg.squareLocationId && (
+        <SquareCardForm
+          applicationId={squareCfg.squareApplicationId}
+          locationId={squareCfg.squareLocationId}
+          environment={squareCfg.squareEnvironment}
+          submitLabel="Save card"
+          secondaryAction={{ label: "Cancel", onClick: () => setShowForm(false) }}
+          onToken={async (token) => {
+            const res = await fetch("/api/member/payment-method", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ paymentMethodId: token }),
+            });
+            if (!res.ok) {
+              const d = await res.json().catch(() => ({}));
+              return d.error ?? "Failed to save card";
+            }
+            onCardSaved();
+            return null;
+          }}
+        />
       )}
     </div>
   );

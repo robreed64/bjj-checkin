@@ -23,6 +23,9 @@ model Member {
   photoUrl         String?   @map("photo_url")
   status           String    @default("active") // 'active','past_due','canceled','inactive','lead','trial'
   stripeCustomerId String?   @map("stripe_customer_id")
+  squareCustomerId String?   @map("square_customer_id")
+  // Square has no default-payment-method on the customer, so we track it ourselves
+  squareCardId     String?   @map("square_card_id")
   checkinToken     String?   @unique @map("checkin_token")
   beltStripes      Int       @default(0) @map("belt_stripes")
   waiverSignedAt   DateTime? @map("waiver_signed_at")
@@ -81,6 +84,8 @@ model MembershipPlan {
   classLimit      Int?     @map("class_limit")
   planType        String   @map("plan_type") // 'gi','no-gi','family','kids','online','drop-in'
   stripePriceId   String?  @map("stripe_price_id")
+  squareCatalogPlanId   String? @map("square_catalog_plan_id")
+  squarePlanVariationId String? @map("square_plan_variation_id")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -96,6 +101,7 @@ model Subscription {
   planId               Int       @map("plan_id")
   plan                 MembershipPlan @relation(fields: [planId], references: [id])
   stripeSubscriptionId String?   @map("stripe_subscription_id")
+  squareSubscriptionId String?   @map("square_subscription_id")
   status               String    // 'active','past_due','canceled'
   startDate            DateTime  @map("start_date") @db.Date
   endDate              DateTime? @map("end_date") @db.Date
@@ -188,8 +194,9 @@ model Sale {
   memberId             Int?     @map("member_id")
   member               Member?  @relation(fields: [memberId], references: [id])
   totalCents           Int      @map("total_cents")
-  paymentMethodType    String   @map("payment_method_type") // 'card_on_file','new_card','cash'
+  paymentMethodType    String   @map("payment_method_type") // 'card_on_file','new_card','cash','square_terminal'
   stripePaymentIntentId String? @map("stripe_payment_intent_id")
+  squarePaymentId      String?  @map("square_payment_id")
   createdAt            DateTime @default(now()) @map("created_at")
 
   lineItems SaleLineItem[]
@@ -294,6 +301,24 @@ model CurriculumLesson {
   @@map("curriculum_lessons")
 }
 
+// Square Terminal payments are asynchronous (the charge completes on the
+// device), so pending checkouts need durable state the poller and the webhook
+// can both finalize exactly once.
+model TerminalCheckout {
+  id               Int      @id @default(autoincrement())
+  squareCheckoutId String   @unique @map("square_checkout_id")
+  status           String   @default("pending") // 'pending','completed','canceled','failed'
+  memberId         Int?     @map("member_id")
+  walkIn           Json?    @map("walk_in") // { name, email?, phone? }
+  lineItems        Json     @map("line_items") // server-priced [{ itemId, quantity, unitPriceCents }]
+  totalCents       Int      @map("total_cents")
+  saleId           Int?     @map("sale_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("terminal_checkouts")
+}
+
 model GymSettings {
   id             Int      @id @default(1)
   gymName        String   @default("My Gym") @map("gym_name")
@@ -308,9 +333,16 @@ model GymSettings {
   timezone       String   @default("America/New_York")
   defaultTaxRate Float    @default(0) @map("default_tax_rate")
   setupComplete        Boolean  @default(false) @map("setup_complete")
+  paymentProvider      String   @default("stripe") @map("payment_provider") // 'stripe','square'
   stripePublishableKey String?  @map("stripe_publishable_key")
   stripeSecretKey      String?  @map("stripe_secret_key")
   stripeWebhookSecret  String?  @map("stripe_webhook_secret")
+  squareAccessToken         String? @map("square_access_token")
+  squareApplicationId       String? @map("square_application_id")
+  squareLocationId          String? @map("square_location_id")
+  squareWebhookSignatureKey String? @map("square_webhook_signature_key")
+  squareEnvironment         String  @default("sandbox") @map("square_environment") // 'sandbox','production'
+  squareTerminalDeviceId    String? @map("square_terminal_device_id")
   brevoApiKey          String?  @map("brevo_api_key")
   brevoSenderEmail     String?  @map("brevo_sender_email")
   brevoSenderName      String?  @map("brevo_sender_name")

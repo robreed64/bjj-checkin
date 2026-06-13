@@ -11,6 +11,12 @@ export default async function POSPage() {
   const categories = (settings.posCategories as string[] | null) ?? ["drinks", "gear", "events"];
   if (!categories.includes("day_pass")) categories.push("day_pass");
 
+  const paymentProvider = settings.paymentProvider === "square" ? "square" : "stripe";
+  const terminalEnabled =
+    paymentProvider === "square" &&
+    !!(settings.squareAccessToken || process.env.SQUARE_ACCESS_TOKEN) &&
+    !!settings.squareTerminalDeviceId;
+
   return (
     <div className="flex flex-col h-screen">
       {/* Top bar */}
@@ -30,7 +36,7 @@ export default async function POSPage() {
 
       {/* Terminal — fills remaining height */}
       <div className="flex-1 overflow-hidden">
-        <POSTerminal categories={categories} initialItems={items.map((i) => ({
+        <POSTerminal categories={categories} paymentProvider={paymentProvider} terminalEnabled={terminalEnabled} initialItems={items.map((i) => ({
           id:         i.id,
           name:       i.name,
           priceCents: i.priceCents,

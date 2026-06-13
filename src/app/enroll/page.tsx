@@ -25,7 +25,7 @@ type FormData = {
   ageGroup: string;
   trainingType: string;
   planId: number | null;
-  stripeCustomerId: string | null;
+  customerId: string | null; // payment-provider customer (Stripe or Square)
   paymentMethodId: string | null;
   promoCode: string;
 };
@@ -66,8 +66,9 @@ export default function EnrollPage() {
   const [form, setForm] = useState<FormData>({
     name: "", email: "", phone: "", dateOfBirth: "",
     ageGroup: "adult", trainingType: "", planId: null,
-    stripeCustomerId: null, paymentMethodId: null, promoCode: "",
+    customerId: null, paymentMethodId: null, promoCode: "",
   });
+  const [promoSupported, setPromoSupported] = useState(true);
 
   type PromoState = { status: "idle" | "checking" | "valid" | "invalid"; label?: string };
   const [promo, setPromo] = useState<PromoState>({ status: "idle" });
@@ -101,6 +102,10 @@ export default function EnrollPage() {
     fetch("/api/plans").then((r) => r.json()).then(setPlans);
     fetch("/api/admin/settings").then(r => r.json()).then(d => {
       if (d.waiverText) setWaiverText(d.waiverText);
+    }).catch(() => {});
+    // Promo codes are a Stripe feature — hide the field for Square gyms
+    fetch("/api/settings/public").then(r => r.json()).then(d => {
+      if (d.paymentProvider === "square") setPromoSupported(false);
     }).catch(() => {});
   }, []);
 
@@ -337,7 +342,7 @@ export default function EnrollPage() {
                 })}
               </div>
 
-              {form.planId && (
+              {form.planId && promoSupported && (
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Promo code (optional)</label>
                   <div className="flex gap-2">
@@ -379,7 +384,7 @@ export default function EnrollPage() {
                 name={form.name}
                 email={form.email}
                 onSuccess={({ customerId, paymentMethodId }) => {
-                  setForm((f) => ({ ...f, stripeCustomerId: customerId, paymentMethodId }));
+                  setForm((f) => ({ ...f, customerId, paymentMethodId }));
                   setStep(4);
                 }}
                 onSkip={() => setStep(4)}

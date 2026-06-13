@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getStripeClient } from "@/lib/stripe";
+import { getPaymentProvider } from "@/lib/payments/provider";
+import { getGymSettings } from "@/lib/gym-settings";
 import { requireAuth } from "@/lib/require-auth";
 
 type Params = Promise<{ id: string }>;
@@ -23,30 +24,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const existing = await prisma.membershipPlan.findUnique({ where: { id: planId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const stripe = await getStripeClient();
-  if (stripe && existing.stripePriceId) {
-    try {
-      const price   = await stripe.prices.retrieve(existing.stripePriceId);
-      const product = typeof price.product === "string" ? price.product : price.product.id;
-      await stripe.products.update(product, {
-        name:        body.name        ?? existing.name,
-        description: body.description ?? existing.description ?? undefined,
-      });
-    } catch { /* non-fatal */ }
-  }
+  const provider = await getPaymentProvider();
+  let providerRefs = {
+    stripePriceId:         existing.stripePriceId,
+    squareCatalogPlanId:   existing.squareCatalogPlanId,
+    squarePlanVariationId: existing.squarePlanVariationId,
+  };
 
-  // If price or interval changed and plan is Stripe-linked, archive old price + create new one
-  let stripePriceId = existing.stripePriceId;
-  if (stripe && existing.stripePriceId && (body.priceCents !== undefined || body.billingInterval !== undefined)) {
+  // Price/interval changes retire the old provider price and create a new one;
+  // existing subscriptions stay on the old price
+  if (provider) {
+    const priceChanged = body.priceCents !== undefined || body.billingInterval !== undefined;
+    const settings = await getGymSettings();
     try {
-      await stripe.prices.update(existing.stripePriceId, { active: false });
-      const newPrice = await stripe.prices.create({
-        currency: "usd",
-        unit_amount: body.priceCents ?? existing.priceCents,
-        recurring: { interval: (body.billingInterval ?? existing.billingInterval) === "yearly" ? "year" : "month" },
-        product: (await stripe.prices.retrieve(existing.stripePriceId)).product as string,
-      });
-      stripePriceId = newPrice.id;
+      const updated = await provider.updatePlan(
+        providerRefs,
+        {
+          name:            body.name        ?? existing.name,
+          description:     body.description ?? existing.description,
+          priceCents:      body.priceCents  ?? existing.priceCents,
+          billingInterval: body.billingInterval ?? existing.billingInterval,
+          currency:        settings.currency,
+        },
+        { priceChanged }
+      );
+      providerRefs = { ...providerRefs, ...updated };
     } catch { /* non-fatal */ }
   }
 
@@ -59,7 +61,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
       classLimit:      body.classLimit      !== undefined ? body.classLimit : existing.classLimit,
       priceCents:      body.priceCents      ?? existing.priceCents,
       billingInterval: body.billingInterval ?? existing.billingInterval,
-      stripePriceId,
+      ...providerRefs,
     },
   });
 
@@ -76,10 +78,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Params }) 
   const existing = await prisma.membershipPlan.findUnique({ where: { id: planId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const stripe = await getStripeClient();
-  if (stripe && existing.stripePriceId) {
+  const provider = await getPaymentProvider();
+  if (provider) {
     try {
-      await stripe.prices.update(existing.stripePriceId, { active: false });
+      await provider.deactivatePlan(existing);
     } catch { /* non-fatal */ }
   }
 

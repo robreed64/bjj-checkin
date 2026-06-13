@@ -2,23 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/require-auth";
 import { getGymSettings } from "@/lib/gym-settings";
-import { getStripeClient } from "@/lib/stripe";
-import type Stripe from "stripe";
+import { getProviderByName } from "@/lib/payments/provider";
+import type { Subscription } from "@prisma/client";
 
-async function getOrCreateCoupon(stripe: Stripe, percent: number): Promise<string> {
-  const couponId = `bjj-family-${percent}pct`;
-  try {
-    await stripe.coupons.retrieve(couponId);
-    return couponId;
-  } catch {
-    await stripe.coupons.create({
-      id: couponId,
-      percent_off: percent,
-      duration: "forever",
-      name: `Family Discount ${percent}%`,
-    });
-    return couponId;
-  }
+// A member can hold a legacy subscription from the previously selected
+// provider, so the discount is applied via the subscription's own provider —
+// not whichever one is currently active.
+function subscriptionProviderRef(sub: Subscription): { name: "stripe" | "square"; ref: string } | null {
+  if (sub.squareSubscriptionId) return { name: "square", ref: sub.squareSubscriptionId };
+  if (sub.stripeSubscriptionId) return { name: "stripe", ref: sub.stripeSubscriptionId };
+  return null;
 }
 
 type Params = Promise<{ memberId: string }>;
@@ -30,29 +23,34 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const { memberId: rawId } = await params;
   const memberId = parseInt(rawId, 10);
 
-  const [settings, stripe] = await Promise.all([getGymSettings(), getStripeClient()]);
-
+  const settings = await getGymSettings();
   if (!settings.familyDiscountEnabled) {
     return NextResponse.json({ error: "Family discounts not enabled" }, { status: 400 });
-  }
-  if (!stripe) {
-    return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   }
 
   const sub = await prisma.subscription.findFirst({
     where: { memberId, status: { in: ["active", "trial"] } },
     orderBy: { createdAt: "desc" },
+    include: { plan: { select: { priceCents: true } } },
   });
 
   if (!sub) {
     return NextResponse.json({ error: "No active subscription found" }, { status: 404 });
   }
-  if (!sub.stripeSubscriptionId) {
-    return NextResponse.json({ error: "Subscription has no Stripe ID" }, { status: 400 });
+  const providerRef = subscriptionProviderRef(sub);
+  if (!providerRef) {
+    return NextResponse.json({ error: "Subscription has no payment provider ID" }, { status: 400 });
   }
 
-  const couponId = await getOrCreateCoupon(stripe, settings.familyDiscountPercent);
-  await stripe.subscriptions.update(sub.stripeSubscriptionId, { discounts: [{ coupon: couponId }] });
+  const provider = await getProviderByName(providerRef.name);
+  if (!provider) {
+    return NextResponse.json({ error: "Payments are not configured" }, { status: 503 });
+  }
+
+  await provider.setSubscriptionDiscount(providerRef.ref, settings.familyDiscountPercent, {
+    priceCents: sub.plan.priceCents,
+    currency: settings.currency,
+  });
   await prisma.subscription.update({ where: { id: sub.id }, data: { familyDiscountApplied: true } });
 
   return NextResponse.json({ ok: true });
@@ -65,22 +63,27 @@ export async function DELETE(req: NextRequest, { params }: { params: Params }) {
   const { memberId: rawId } = await params;
   const memberId = parseInt(rawId, 10);
 
-  const stripe = await getStripeClient();
-  if (!stripe) {
-    return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
-  }
-
   const sub = await prisma.subscription.findFirst({
     where: { memberId, status: { in: ["active", "trial"] }, familyDiscountApplied: true },
     orderBy: { createdAt: "desc" },
+    include: { plan: { select: { priceCents: true } } },
   });
 
   if (!sub) {
     return NextResponse.json({ error: "No discounted subscription found" }, { status: 404 });
   }
 
-  if (sub.stripeSubscriptionId) {
-    await stripe.subscriptions.update(sub.stripeSubscriptionId, { discounts: [] });
+  const providerRef = subscriptionProviderRef(sub);
+  if (providerRef) {
+    const provider = await getProviderByName(providerRef.name);
+    if (!provider) {
+      return NextResponse.json({ error: "Payments are not configured" }, { status: 503 });
+    }
+    const settings = await getGymSettings();
+    await provider.setSubscriptionDiscount(providerRef.ref, null, {
+      priceCents: sub.plan.priceCents,
+      currency: settings.currency,
+    });
   }
   await prisma.subscription.update({ where: { id: sub.id }, data: { familyDiscountApplied: false } });
 
